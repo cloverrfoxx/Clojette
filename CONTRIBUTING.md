@@ -26,7 +26,7 @@ Do not store funcRef objects without using a `@`. This calls the function. We do
 
 Do not commit print() debug calls. These are useful when debugging, but we need to keep the code clean.
 
-Do not use `isa map` check without also checking `hasIndex("__tag__)` when distinguishing between runtime objects from plain maps.
+Do not use `isa map` check without also checking `hasIndex("__tag__")` when distinguishing between runtime objects from plain maps.
 
 
 ## Clojette
