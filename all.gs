@@ -1180,9 +1180,12 @@ end for
 macros = "(import ./macros.lisp)"
 stdlib = "(import ./stdlib.lisp)"
 tests = "(import ./tests.lisp)"
-eval(parse(macros), globalEnv)
-eval(parse(stdlib), globalEnv)
-eval(parse(tests), globalEnv)
+
+// Comment these lines to load the macros, standard library, or tests.
+// Otherwise you'll get the plain REPL. 
+//eval(parse(macros), globalEnv)
+//eval(parse(stdlib), globalEnv)
+//eval(parse(tests), globalEnv)
 
 // REPL
 while true
