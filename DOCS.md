@@ -6,6 +6,7 @@ Clojette is a Clojure-inspired Lisp that runs inside [GreyHack](https://greyhack
 
 ## Table of Contents
 
+0. [Lisp as a programming language](#lisp-as-a-programming-language)
 1. [Getting Started](#getting-started)
 2. [The Basics of Lisp Syntax](#the-basics-of-lisp-syntax)
 3. [Data Types](#data-types)
@@ -21,6 +22,18 @@ Clojette is a Clojure-inspired Lisp that runs inside [GreyHack](https://greyhack
 13. [Differences from Clojure](#differences-from-clojure)
 
 ---
+
+## Lisp as a programming language
+Before diving into syntax, it helps to understand what makes Lisp different from most languages. This will make it easier to understand this documentation.
+
+In most languages, code and data are different things. You write code (`if x > 0 { ... }`), and you work with data (`[1, 2, 3]`). They look different, they behave differently, and you can't easily treat one as the other.
+
+In Lisp however, code is data. A function call like `(+ 1 2)` is just a list — the same kind of list as `[1 2 3]`. The first element happens to be a function, and the rest are arguments. That's the whole rule. This is called `homoiconicity`.
+
+This might seem like a curiosity, but leads to a powerful language. Because data is code, you can write code that writes code. This allows you, the programmer, to extend the language as its syntax.
+This is what macros are, and it's why Lisps are uniquely powerful for building abstractions. When you get to the [Macros](#macros) section, this will matter a lot.
+
+For now, the main idea is that lists in parentheses is either data or a function call.
 
 ## Getting Started
 
@@ -39,6 +52,8 @@ Type any expression and press Enter. Type `exit`, `quit`, or `q` to leave.
 ```
 
 `import` reads the file, wraps it in `(do ...)`, and evaluates it in the current environment. Everything defined in the file becomes available in your session. This will be improved in future updates.
+
+The stdlib is distributed separately from the runtime, so you'll need to copy those files from the `/src/` folder. This will, again, be improved in future updates.
 
 ---
 
@@ -107,8 +122,7 @@ nil
 ```
 
 ### Keywords
-
-Keywords start with `:` and evaluate to themselves. They are most commonly used as map keys or sentinel values. As of right now, you cannot refer to values in a map using keywords, although this is planned.
+Keywords start with : and always evaluate to themselves — they are their own value. They are most commonly used as map keys or as sentinel values in cond.
 
 ```clojure
 :name
@@ -116,9 +130,13 @@ Keywords start with `:` and evaluate to themselves. They are most commonly used 
 :ok
 ```
 
+Keywords are useful as map keys because they're unambiguous and self-describing. See [Map operations](#map-operations) for how they're used in practice.
+
+> Note: In Clojure, you can use a keyword as a function to look up values in a map: (:name my-map). This is not yet supported in Clojette. Use (get my-map :name) instead.
+
 ### Lists
 
-Lists are the fundamental data structure. The code itself is made out of lists. Lists are created with `(list ...)` or the `'(...)` quote syntax. Note that `(...)` without quoting is a *function call*, not a data literal. You can use `[...]` for literal sequences.
+Lists are the fundamental data structure in Clojette. As discussed before, the code itself is made out of lists. Lists are created with `(list ...)` or the `'(...)` quote syntax. Note that `(...)` without quoting is a *function call*, not a data literal. You can use `[...]` for literal sequences.
 
 ```clojure
 (list 1 2 3)    ;; -> [1 2 3]
@@ -220,17 +238,21 @@ Evaluates `condition`. If truthy, evaluates and returns `then-expr`. Otherwise e
 (if false "yes")          ;; -> null
 ```
 
-> In Clojette, `false` and `null`/`nil` are falsy. Additionally (due to MiniScript), values like `0` and `""` are falsy. 
+> Falsy values in Clojette: false and null/nil are falsy, as you'd expect. However, because Clojette runs on MiniScript, 0 and "" (empty string) are also falsy. This differs from standard Clojure, where only false and nil are falsy. Be careful when using if with numbers or strings that might be zero or empty.
 
 ### `quote`
 
-Prevents evaluation. Returns its argument as-is.
+`quote` prevents a form from being evaluated. It returns the form as-is — as data.
 
 ```clojure
 (quote (1 2 3))   ;; -> [1 2 3] (a list, not a function call)
 '(1 2 3)          ;; shorthand for the same thing
 'hello            ;; -> "hello" (the symbol, not a lookup)
 ```
+
+#### Why might someone want this?
+Normally, when you write (+ 1 2), Clojette evaluates it — it calls + with 1 and 2 and returns 3. But sometimes you want the list itself, not its result. Quoting is how you say "treat this as data, don't evaluate it."
+This becomes important in two situations: creating literal lists of data, and writing macros (where you build up code as data before it runs). For everyday programming, you'll mostly use [...] vector syntax for data literals and won't need quote directly. When you start writing macros, it becomes essential.
 
 ### `set!`
 
@@ -445,7 +467,15 @@ A macro for imperative-style loops (built on `loop`/`recur`):
 
 ## Macros
 
-Macros transform code at evaluation time, before the transformed result is itself evaluated. This lets you extend the language with new syntax.
+Macros are the most powerful feature of Lisp, and the most unique. They let you extend the language itself by writing code that runs at evaluation time to transform other code.
+
+### What is a macro, and why does it matter?
+
+In Clojette (and Lisp in general) code is just data. Lisp consists of symbols and values. A macro is a function that receives unevaluated code as data, transforms it, and returns new code that then gets evaluated. 
+
+This means you can add new syntax to the language. `when`, `unless`, `cond`, `->`, `loop` are all macros. They do not exist in the Clojette interpreter, instead they are defined in Clojette.
+
+For example, let's look at `when`. We want `(when condition body)` to mean "if condition is true, evaluate body, otherwise return null." There's no way to write this as a regular function, because a regular function evaluates all its arguments before running. We need `body` to only evaluate if `condition` is true. A macro lets us do this.
 
 ### Defining macros
 
@@ -466,60 +496,58 @@ The arguments to a macro are the **unevaluated** forms. The macro returns a new 
 
 ### Quasiquoting
 
-Macros are almost always written with quasiquoting, which makes it much easier to build code as data.
+Writing macros with `list` and `quote` gets verbose quickly. Quasiquoting is a cleaner way to build code templates.
 
-- `` ` `` (backtick) - quasiquote: like `quote`, but allows selective evaluation inside
-- `~` - unquote: evaluate this expression inside a quasiquote
-- `~@` - splice-unquote: evaluate and splice a list into the surrounding form
+- `\`` (backtick)   - This is quasiquote, it's like `quote`, but allows selective evaluation inside of it.
+- `~`   - This is the unquote, it evaluates the expression inside a quasiquoted expression.
+- `~@`  - This is the splice-unquote, it evaluates and splices the resulting list into the surrounding form.
 
-```clojure
-(defmacro my-and [a b]
-  `(if ~a ~b false))
+Quasiquoted forms are templates that you can fill. `~` fills a spot in the template with a single value, whereas `~@` fills the spot by spreading a list into the template.
 
-(my-and true (> 5 3))
-;; expands to: (if true (> 5 3) false)
-;; -> true
-```
+```clojure 
+;; Without quasiquote:
+(defmacro my-when [condition body]
+  (list 'if condition body null))
 
-Splice-unquote (`~@`) inserts all elements of a list:
-
-```clojure
-(defmacro my-do [& forms]
-  `(do ~@forms))
-
-(my-do (println "a") (println "b"))
-;; expands to: (do (println "a") (println "b"))
+;; With quasiquote — much cleaner:
+(defmacro my-when [condition body]
+  `(if ~condition ~body null))
 ```
 
 ### Variadic macros
-
-Like functions, macros can use `&` to collect remaining arguments:
-
+Like functions, macros can use & to collect remaining arguments:
 ```clojure
 (defmacro unless [condition & body]
   `(if ~condition null (do ~@body)))
 ```
 
-### `gensym`
+### gensym and variable capture
+There's a small problem that can bite you in macros. If a macro introduces a local binding, it might accidentally clash with a variable in the code that uses the macro.
 
-To avoid variable capture in macros, generate unique names with `gensym`:
-
-```clojure
-(gensym)        ;; -> "G__1" (or some unique name)
-(gensym "tmp")  ;; -> "tmp2"
-```
-
-Use this when a macro introduces a local binding that could conflict with user code:
-
+Let's consider the following macro:
 ```clojure
 (defmacro swap! [a b]
   `(let [tmp ~a]
-     (do
-       (set! ~a ~b)
-       (set! ~b tmp))))
+     (set! ~a ~b)
+     (set! ~b tmp)))
 ```
 
-In the above, `tmp` could shadow a user variable named `tmp`. In a production macro you would use `(gensym "tmp")` to generate a fresh, collision-free name.
+If the user has a variable named tmp, this macro will silently use theirs instead of creating a fresh one. This is called variable capture, and it's a well-known macro bug.
+
+`gensym` generates a unique symbol name that is guaranteed not to clash with anything:
+```clojure
+(gensym)        ;; -> "G__1" (unique each time)
+(gensym "tmp")  ;; -> "G__2tmp"
+```
+
+In production macros, use `gensym` for any local bindings:
+```clojure
+(defmacro swap! [a b]
+  (let [tmp-name (gensym "tmp")]
+    `(let [~tmp-name ~a]
+       (set! ~a ~b)
+       (set! ~b ~tmp-name))))
+```
 
 ### How macros are looked up
 
@@ -842,9 +870,10 @@ Clojette is heavily inspired by Clojure but is not a complete implementation. He
 - **No Java interop** - duh, interop is with GreyScript/MiniScript instead (see [GreyScript Interop](#greyscript-interop))
 - **No protocol or multimethods**
 - **No `loop` binding destructuring** - bindings in `loop` must be simple names
+- **No keyword lookup** - `(:key map)` is not supported; use `(get map :key)` instead
 
 ### Behavioural differences
-
+- **Falsy values** - 0 and "" are falsy due to MiniScript's type system, unlike Clojure where only false and nil are falsy
 - **`and`** returns the last value if all truthy, or the first falsy value - same as Clojure, but note there is no `&&` short-circuit returning `nil`, it returns `false` on the falsy path
 - **`or`** returns `false` (not `nil`) when no clause is truthy
 - **Vectors and lists are the same type** - `[1 2 3]` and `(list 1 2 3)` produce identical values; there is no distinction at runtime
