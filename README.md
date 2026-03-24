@@ -19,6 +19,8 @@ There are currently a few features that are needed.
 4. Stack traces to try/catch. This is simple to add.
 5. `#{}`, `@` deref, and `#()` reader macros.
 6. Expose `eval()` to the user.
+7. Stronger protections in the stdlib, possibly through a `guard` function. Maybe takes in `type`, `amount`, `@args`?
+8. Fix any crashes, the Clojette runtime shouldn't crash, instead it should error out gracefully
 
 # Contributing
 Pull requests are welcome. To get to know the ins and outs of contributing, check out `CONTRIBUTING.md`. Also make sure to run the tests before making a pull requests. All tests should pass, and if they do not pass, any PR will not be accepted. To make sure regressions do not happen, the test suite MUST pass before a PR is accepted.
