@@ -29,6 +29,7 @@ nativeFns = {
     "parent_path": @parent_path,
     "get_abs_path": @get_abs_path,
     "include_lib": @include_lib,
+	  "yield": @yield,
     "exit": @exit,
     "wait": @wait,
     "time": @time,
@@ -39,6 +40,8 @@ nativeFns = {
     "val": @val,
     "slice": @slice,
     "typeof": @typeof,
+	  "globals": @globals,
+	  "format-columns": @format_columns,
 }
 
 for kv in nativeFns

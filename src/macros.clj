@@ -66,3 +66,10 @@
   `(let [o# ~obj]
      ~@(map (fn [f] `(~(car f) o# ~@(cdr f))) forms)
      o#))
+
+(defmacro while [cond & body]
+  `(loop []
+     (if ~cond
+       (do
+         ~@body
+         (recur)))))

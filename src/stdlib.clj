@@ -15,7 +15,7 @@
 ;;   You should have received a copy of the GNU General Public License
 ;;   along with Clojette. If not, see <https://www.gnu.org/licenses/>.
 
-;; List operations, these are stack-safe via loop/recur
+;; List operations - stack-safe via loop/recur
 (defn map [f coll]
   (loop [remaining coll acc []]
     (if (empty? remaining)
@@ -73,7 +73,7 @@
 (defn range [start end]
   (loop [i start acc []]
     (if (>= i end)
-      (reverse acc)
+      acc
       (recur (+ i 1) (cons i acc)))))
 
 (defn concat [a b]
@@ -115,4 +115,4 @@
 (defn identity [x] x)
 (defn constantly [x] (fn [& _] x))
 (defn complement [f] (fn [& args] (not (apply f args))))
-(defn comp [f g] (fn [x] (f (g x))))
+(defn comp [f g] (fn [x] (f (g x)))

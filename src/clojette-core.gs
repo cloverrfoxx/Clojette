@@ -29,10 +29,19 @@ end function
 
 // We can check if a given result is an error; we want error handling
 isError = function(val)
-    if not @val isa map then return false
-    // We know that the ope is a map, and potentially is an error; safe to handle without deref 
+  if not @val isa map then return false
+	if @val.hasIndex("classID") and @val["classID"] == "error" then
+    // We know that the op is a map, and potentially is an error; safe to handle without deref 
     if not @val.hasIndex("__tag__") then return false
     return @val["__tag__"] == @__runtimeTag__
+  end if
+	return false
+end function
+
+addTrace = function(err, frame)
+    if not err.hasIndex("trace") then err["trace"] = []
+    err["trace"].push(frame)
+    return err
 end function
 
 isRuntimeObject = function(val)
@@ -56,7 +65,7 @@ callFunction = function(op, args, name, isNative=false)
                 result = null
                 for bodyExpr in op["body"]
                     result = eval(bodyExpr, newEnv)
-                    if isError(@result) then return result
+                    if isError(@result) then return addTrace(@result, "in " + name)
                 end for
                 // check if recur was signalled
                 if result isa map and result.hasIndex("classID") and result["classID"] == "recur" then
@@ -95,7 +104,7 @@ evalQuasiquote = function(exp, env)
     // unquote: evaluate and return
     if exp[0] == "unquote" then
 		result = eval(exp[1], env)
-        if isError(@result) then return result
+    if isError(@result) then return result
 		return result
     end if
     
@@ -104,106 +113,59 @@ evalQuasiquote = function(exp, env)
     for i in range(0, exp.len-1)
         item = exp[i]
         if item isa list and item.len > 0 and item[0] == "splice-unquote" then
-            spliced = eval(item[1], env)
-			if isError(@spliced) then return spliced
-    		if not @spliced isa list then return lispError("splice-unquote requires a list, got: " + typeof(@spliced))
+          spliced = eval(item[1], env)
+          if isError(@spliced) then return spliced
+          if not @spliced isa list then return lispError("splice-unquote requires a list, got: " + typeof(@spliced))
             if spliced.len > 0 then
-                for j in range(0, spliced.len-1)
-                    result.push(spliced[j])
-                end for
+              for j in range(0, spliced.len-1)
+                result.push(spliced[j])
+              end for
             end if
         else
-    		item = evalQuasiquote(@item, env)
-    		if isError(@item) then return item
-    		result.push(@item)
+    	    item = evalQuasiquote(@item, env)
+    		  if isError(@item) then return item
+    		  result.push(@item)
         end if
     end for
     return result
 end function
 
 // Convert a string of characters into a list of tokens
-// MiniScript, being the retarded fucker it is, sees the input as a RegEx. As a result, we have to escape the input.
-//tokenize = function(chars)
-//    chars = chars.replace(char(10), " ")
-//    chars = chars.replace(char(13), " ")
-//    chars = chars.replace("\(", "( ")
-//    chars = chars.replace("\)", " ) ")
-//    chars = chars.replace("\[", " [ ")
-//    chars = chars.replace("\]", " ] ")
-//    chars = chars.replace("'", " ' ")
-//    chars = chars.replace("`", " ` ")
-//	chars = chars.replace("~@", " SPLICEUNQUOTE ")
-//	chars = chars.replace("~", " ~ ")
-//	chars = chars.replace(" SPLICEUNQUOTE ", " ~@ ")
-
-	// Make string literals...
-	//result = []
-    //inString = false
-    //current = ""
-    //for i in range(0, chars.len-1)
-        //c = chars[i]
-        //if c == """" then
-        //    if inString then
-        //        current = current + c
-        //        result.push(current)
-        //        current = ""
-        //        inString = false
-        //    else
-        //        inString = true
-        //        current = c
-        //    end if
-        //else if inString then
-        //    current = current + c
-        //else
-            //current = current + c
-        //end if
-    //end for
-
-
-
- //   tokens = chars.split(" ")
- //   clean = []
- //   for t in tokens
- //       if t != "" then clean.push(t)
- //   end for
-//    return clean
-//end function
-
 tokenize = function(chars)
     tokens = []
     //if tokens.len == 0 then return lispError("Unexpected EOF")
     //if isError(tokens[0]) then return tokens.pull  // propagate tokenizer errors
     i = 0
     while i < chars.len
-        c = chars[i]
-		if c == """" then
+      c = chars[i]
+		  if c == """" then
     		tok = c
     		i = i + 1
     		while i < chars.len and chars[i] != """"
-        		if chars[i] == "\" then
-            		tok = tok + chars[i]
-            		i = i + 1
-            		if i < chars.len then tok = tok + chars[i]
-        		else
-            		tok = tok + chars[i]
-        		end if
-        		i = i + 1
+        	if chars[i] == "\" then
+            tok = tok + chars[i]
+            i = i + 1
+            if i < chars.len then tok = tok + chars[i]
+        	else
+            tok = tok + chars[i]
+        	end if
+        	i = i + 1
     		end while
     		if i >= chars.len then
-        		tokens.push(lispError("Unterminated string literal: " + tok))
-        		return tokens
+        	tokens.push(lispError("Unterminated string literal: " + tok))
+        	return tokens
     		end if
     		tok = tok + """"
     		tokens.push(tok)
         else if c == "(" or c == ")" or c == "[" or c == "]" then
-            tokens.push(c)
+          tokens.push(c)
         else if c == "~" then
-            if i + 1 < chars.len and chars[i+1] == "@" then
-                tokens.push("~@")
-                i = i + 1
-            else
-                tokens.push("~")
-            end if
+          if i + 1 < chars.len and chars[i+1] == "@" then
+            tokens.push("~@")
+            i = i + 1
+          else
+            tokens.push("~")
+          end if
         else if c == "'" or c == "`" then
             tokens.push(c)
         else if c == " " or c == char(9) or c == char(10) or c == char(13) then
@@ -211,15 +173,15 @@ tokenize = function(chars)
         else if c == ";" then
             // comment, skip to end of line
             while i < chars.len and chars[i] != char(10)
-                i = i + 1
+              i = i + 1
             end while
         else
-            tok = c
-            while i + 1 < chars.len and " ()[]{}""';`," .indexOf(chars[i+1]) == null
-                i = i + 1
-                tok = tok + chars[i]
-            end while
-            tokens.push(tok.trim)
+          tok = c
+          while i + 1 < chars.len and " ()[]{}""';`," .indexOf(chars[i+1]) == null
+            i = i + 1
+            tok = tok + chars[i]
+          end while
+          tokens.push(tok.trim)
         end if
         i = i + 1
     end while
@@ -233,64 +195,68 @@ end function
 //  Is recursive
 //
 readFromTokens = function(tokens)
+    //print("We are in readFromTokens")
+    //print("Tokens in readFromTokens are: " + tokens)
     // We don't want an empty list
     if tokens.len == 0 then return lispError("Unexpected EOF")
     // We also dont want anything that is NOT a list
     if not @tokens isa list then return lispError("Not a list")
     token = tokens.pull
     
+    //print("Token is " + token)
     // We encountered a symbol, parse it recursively
-	if token == "(" then
+	  if token == "(" then
     	L = []
     	while tokens.len > 0 and tokens[0] != ")"
-        	item = readFromTokens(tokens)
-        	if isError(@item) then return item
-        	L.push(item)
+        item = readFromTokens(tokens)
+        if isError(@item) then return item
+        L.push(item)
     	end while
     	if tokens.len == 0 then return lispError("Unexpected EOF while reading list")
     	tokens.pull  // consume the )
     	return L
 
-else if token == "[" then
-    L = []
-    while tokens.len > 0 and tokens[0] != "]"
-        item = readFromTokens(tokens)
-        if isError(@item) then return item
-        L.push(item)
-    end while
-    if tokens.len == 0 then return lispError("Unexpected EOF while reading vector")
-    tokens.pull  // consume the ]
-    return ["array"] + L
-    
-    else if token == ")" then
-		return lispError("Unexpected )")
-    else if token == "]" then
+  else if token == "[" then
+      L = []
+      while tokens.len > 0 and tokens[0] != "]"
+          item = readFromTokens(tokens)
+          if isError(@item) then return item
+          L.push(item)
+      end while
+      if tokens.len == 0 then return lispError("Unexpected EOF while reading vector")
+      tokens.pull  // consume the ]
+      return ["array"] + L
+      
+      else if token == ")" then
+  		return lispError("Unexpected )")
+      else if token == "]" then
         return lispError("Unexpected ]")
-
+  
     // quote tokens for macroing around
-	else if token == "'" then
+  	else if token == "'" then
     	inner = readFromTokens(tokens)
     	if isError(@inner) then return inner
-    	return ["quote", inner]
-	else if token == "`" then
-    	inner = readFromTokens(tokens)
-    	if isError(@inner) then return inner
-    	return ["quasiquote", inner]
-	else if token == "~@" then
-    	inner = readFromTokens(tokens)
-    	if isError(@inner) then return inner
-    	return ["splice-unquote", inner]
-	else if token == "~" then
-    	inner = readFromTokens(tokens)
-    	if isError(@inner) then return inner
-    	return ["unquote", inner]
+      return ["quote", inner]
+  	else if token == "`" then
+      inner = readFromTokens(tokens)
+      if isError(@inner) then return inner
+      return ["quasiquote", inner]
+  	else if token == "~@" then
+      inner = readFromTokens(tokens)
+      if isError(@inner) then return inner
+      return ["splice-unquote", inner]
+  	else if token == "~" then
+      inner = readFromTokens(tokens)
+      if isError(@inner) then return inner
+      return ["unquote", inner]
     // Return an atom, we can let the MiniScript type coercion do everything for us
     else 
-		return atom(token)
-    end if
+  	return atom(token)
+  end if
 end function
 
 parse = function(code)
+    // print("parse function!")
     tokens = tokenize(code)
     result = readFromTokens(tokens)
     if isError(@result) then return result
@@ -299,27 +265,26 @@ parse = function(code)
 end function
 
 eval = function(exp, env)
-
 	if @exp isa number then return exp
 	if @exp == null then return null
 
     if @exp isa list then
-        if exp.len == 0 then return exp
+      if exp.len == 0 then return exp
 
-        first = exp[0]
+      first = exp[0]
 
-        // handle special forms first
+      // handle special forms first
 
 		if first == "quasiquote" then
-    		return evalQuasiquote(exp[1], env)
+    	return evalQuasiquote(exp[1], env)
 		end if
 
 		// Game interop
 		if first isa string and first[0] == "." then
-    		methodName = first[1:]
-    		obj = eval(exp[1], env)
-    		if obj == null then return lispError("null object in interop call ." + methodName)
-			if isError(obj) then return obj // Check for errors!    
+    	methodName = first[1:]
+    	obj = eval(exp[1], env)
+    	if @obj == null then return lispError("null object in interop call ." + methodName)
+			if isError(@obj) then return addTrace(@obj, "in " + first) // Check for errors!    
 
     		fn = @obj[methodName]
     
@@ -327,11 +292,11 @@ eval = function(exp, env)
     
     		args = []
     		if exp.len > 2 then
-        		for i in range(2, exp.len-1)
-					result = eval(exp[i], env)
-					if isError(@result) then return @result
-            		args.push(@result)
-        		end for
+        	for i in range(2, exp.len-1)
+					  result = eval(exp[i], env)
+					  if isError(@result) then return @result
+            args.push(@result)
+        	end for
     		end if
 
     		// pass obj as self, then spread remaining args
@@ -357,33 +322,34 @@ eval = function(exp, env)
 	
 		if first == "import" then
 			path = exp[1]  // don't eval, take the raw token
-    		// strip quotes if present
-    		if path[0] == """" then path = path[1:-1]
-    		//path = eval(exp[1], env)
-    		hostComputer = get_shell.host_computer
+    	// strip quotes if present
+    	if path[0] == """" then path = path[1:-1]
+
+    	//path = eval(exp[1], env)
+    	hostComputer = get_shell.host_computer
 			fpath = get_abs_path(path)
-    		f = hostComputer.File(fpath)
-    		if f == null then return lispError("Error: file not found: " + path)
-    		if f.is_binary then return lispError("Error: cannot import binary file: " + path)
-    		contents = f.get_content
-    		if contents == null then return lispError("Error: no read permission: " + path)
-    		wrapped = "(do " + contents + ")"
+    	f = hostComputer.File(fpath)
+    	
+      if f == null then return lispError("Error: file not found: " + path)
+    	if f.is_binary then return lispError("Error: cannot import binary file: " + path)
+    	contents = f.get_content
+    	if contents == null then return lispError("Error: no read permission: " + path)
+    	wrapped = "(do " + contents + ")"
 			result = parse(wrapped)
 			if isError(@result) then return result
-    		return eval(result, env)
+    	return eval(result, env)
 		end if
 	
 		if first == "set!" then
-    		name = exp[1]
-    		value = eval(exp[2], env)
+    	name = exp[1]
+    	value = eval(exp[2], env)
 			if isError(@value) then return value
     		return env.setExisting(name, value)
 		end if
 
-		// First occurrence
 		if globalEnv.locals["macros"].hasIndex(first) then
-    		macroFn = globalEnv.locals["macros"][first]  // no .get!
-   			newExp = macroFn(exp[1:])
+    	macroFn = globalEnv.locals["macros"][first]  // no .get!
+   		newExp = macroFn(exp[1:])
 			res = eval(newExp, env)
 			if isError(@res) then return res
     		return res
@@ -466,23 +432,25 @@ eval = function(exp, env)
 		if first == "apply" then
     		fn = eval(exp[1], env)
     		argList = eval(exp[2], env)
-			if isError(@fn) then return fn
-			if isError(@argList) then return argList
+			  if isError(@fn) then return fn
+			  if isError(@argList) then return argList
     		if not @argList isa list then return lispError("Apply requires a list as second argument")
     		isNative = globalEnv.natives.hasIndex(exp[1])
-    		return callFunction(@fn, @argList, @exp[1], isNative)
+        res = callFunction(@fn, @argList, @exp[1], isNative)
+        if isError(@res) then return addTrace(@res, "in " + first) 
+    		return res
 		end if
 	
 		if first == "and" then
     		if exp.len == 1 then return true  // (and) with no args
     		result = true
-			if exp.len > 1 then
+			  if exp.len > 1 then
     			for i in range(1, exp.len-1)
-        			result = eval(exp[i], env)
+        		result = eval(exp[i], env)
 					if isError(@result) then return result
-        			if not result then return false  // short circuit
+        		if not result then return false  // short circuit
     			end for
-			end if
+			  end if
     		return result
 		end if
 
@@ -528,51 +496,89 @@ eval = function(exp, env)
     		return result
 		end if
 	
-        if first == "if" then
-            cond = eval(exp[1], env)
-			if isError(@cond) then return cond
-            if @cond then
-                return eval(exp[2], env)
-			else
-    			if exp.len > 3 then return eval(exp[3], env)
+      if first == "if" then
+        cond = eval(exp[1], env)
+			  if isError(@cond) then return cond
+        if @cond then
+          return eval(exp[2], env)
+			  else
+    		  if exp.len > 3 then return eval(exp[3], env)
     			return null
-			end if
-        end if
+			  end if
+      end if
+
+		if first == "ns" then
+			nsName = exp[1]
+    	if nsName isa list then nsName = exp[1][1]  // handle quoted ns names
+   		namespaces = globalEnv.locals["__namespaces__"]
+    	if not namespaces.hasIndex(nsName) then
+        namespaces[nsName] = {}
+        globalEnv.locals["__ns_aliases__"][nsName] = {}
+    	end if
+    	globalEnv.locals["__current_ns__"] = nsName
+    	return nsName
+		end if
 
 		if first == "def" or first == "define" then
-    		name = exp[1]
-    		value = eval(exp[2], env)
-    		if isError(@value) then return value
-    		env.set(name, value)
-    		return value
+    	name = exp[1]
+    	value = eval(exp[2], env)
+    	if isError(@value) then return value
+			currentNs = globalEnv.locals["__current_ns__"]
+			globalEnv.locals["__namespaces__"][currentNs][name] = @value
+    	env.set(name, value)
+    	return value
 		end if
 
 		if first == "fn" then
-    		params = exp[1]
-    		if params isa list and params.len > 0 and params[0] == "array" then
-        		params = params[1:]
-    		end if
-    		return {"classID": "fn", "args": params, "body": exp[2:], "env": env}
+    	params = exp[1]
+    	if params isa list and params.len > 0 and params[0] == "array" then
+      		params = params[1:]
+    	end if
+    	return {"classID": "fn", "args": params, "body": exp[2:], "env": env}
 		end if
         
 		// normal function call
-
 		op = eval(first, env)
 		if isError(@op) then return op
 		args = []
 		if exp.len > 1 then
-    		for i in range(1, exp.len-1)
-        		val = eval(exp[i], env)
-				if isError(@val) then return val
-            	args.push(@val)
-    		end for
+    	for i in range(1, exp.len-1)
+      	val = eval(exp[i], env)
+			  if isError(@val) then return val
+        args.push(@val)
+    	end for
 		end if
 		isNative = globalEnv.natives.hasIndex(first)
-		return callFunction(@op, @args, @first)
-	else if @exp isa string then
+		//print("op type: " + typeof(@op))
+		//print("op value: " + @op)
+    res = callFunction(@op, @args, @first, isNative)
+    if isError(@res) then return addTrace(@res, " in " + first)
+		return res
+	  
+    else if @exp isa string then
     	// keywords are self-evaluating
     	if exp[0] == ":" then return exp
     	if exp[0] == """" then return exp[1:-1]  // string literal, strip quotes
+
+		if exp.indexOf("/") != null then
+    	parts = exp.split("/")
+    	if parts.len == 2 and parts[0] != "" and parts[1] != "" then
+      	alias = parts[0]
+      	sym = parts[1]
+      	currentNs = globalEnv.locals["__current_ns__"]
+      	aliases = globalEnv.locals["__ns_aliases__"][currentNs]
+      	if aliases.hasIndex(alias) then
+          fullNs = aliases[alias]
+      	else
+        	fullNs = alias
+      	end if
+      	namespaces = globalEnv.locals["__namespaces__"]
+      	if not namespaces.hasIndex(fullNs) then return lispError("No such namespace: " + fullNs)
+      	if not namespaces[fullNs].hasIndex(sym) then return lispError("No such var: " + exp)
+      	return @namespaces[fullNs][sym]
+   		end if
+		end if
+
     	return env.get(@exp)  // walks the chain, errors if not found
     else
         return exp

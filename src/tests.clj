@@ -236,7 +236,7 @@
 (assert-eq "trim"        "hello"       (trim "  hello  "))
 (assert-eq "upper-case"  "HELLO"       (upper-case "hello"))
 (assert-eq "lower-case"  "hello"       (lower-case "HELLO"))
-(assert-eq "replace"     "hXllX"       (replace "hello" "e" "X"))
+(assert-eq "replace"     "hXllo"       (replace "hello" "e" "X"))
 (assert-eq "index-of"    2             (index-of "hello" "l"))
 (assert-eq "subs"        "ell"         (subs "hello" 1 4))
 
@@ -302,7 +302,7 @@
 ;; ============================================================
 (run-section "Threading macros")
 (assert-eq "-> chain" 10   (-> 1 (+ 2) (+ 3) (+ 4)))
-;;(assert-eq "->"   [2 4 6]  (-> [1 2 3] (map (fn [x] (* x 2)) )))
+;; (assert-eq "->"   [2 4 6]  (-> [1 2 3] (map (fn [x] (* x 2)) )))
 ;; (assert-eq "->"   [2 4 6]  (-> [1 2 3] (map (fn [x] (* x 2)))))
 (assert-eq "->>"  [2 4 6]  (->> [1 2 3] (map (fn [x] (* x 2)))))
 (assert-eq "-> chain" 10   (-> 1 (+ 2) (+ 3) (+ 4)))
@@ -347,6 +347,24 @@
   (let [x 5]
     (set! x (* x 2))
     x))
+
+;; ============================================================
+;; namespaces
+;; ============================================================
+(run-section "namespaces")
+(ns test.ns)
+(def x 42)
+(ns user)
+(assert-eq "ns qualified lookup" 42 test.ns/x)
+
+;; ============================================================
+;; native functions
+;; ============================================================
+(run-section "native functions")
+(assert-eq "rnd test" "0.995347" (str (rnd 12)))
+(assert-eq "get_shell" "shell" get_shell)
+(assert-true "valid ip" (is_valid_ip "127.0.0.1"))
+(assert-eq "get file" "file" (str (-> (get_shell) (.host_computer) (.File "/etc/passwd"))))
 
 ;; ============================================================
 ;; Results

@@ -158,7 +158,7 @@ end function
 // List operations
 globalEnv.locals["list"] = function(args)
 	if args == null then return lispError("Args for list is null!")
-    return [] + args
+  return [] + args
 end function
 
 globalEnv.locals["car"] = function(args)
@@ -431,8 +431,9 @@ globalEnv.locals["split"] = function(args)
 end function
 
 globalEnv.locals["join"] = function(args)
-    if args.len != 2 then return lispError("join requires exactly 2 arguments")
-    return args[0].join(args[1])
+  if @args.len != 2 then return lispError("join requires exactly 2 arguments")
+  if typeof(@args) != "list" then return lispError("Expected a list, got " + typeof(@args))
+  return args[0].join(args[1])
 end function
 
 globalEnv.locals["trim"] = function(args)

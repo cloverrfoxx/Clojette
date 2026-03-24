@@ -15,20 +15,21 @@
 //   You should have received a copy of the GNU General Public License
 //   along with Clojette. If not, see <https://www.gnu.org/licenses/>.
 
-__runtimeTag__ = function	
+__runtimeTag__ = function
 end function
 
 lispError = function(msg)
-	print("ERROR: "+ msg)
-    return {"classID": "error", "__tag__": @__runtimeTag__, "message": msg}
+  if msg == null then return {"classID": "error", "__tag__": @__runtimeTag__, "message": "Null"}
+  return {"classID": "error", "__tag__": @__runtimeTag__, "message": msg}
 end function
 
-import_code("/home/<user>/clojette/clojette-env.src")    // sets up globalEnv + natives = {}
-import_code("/home/<user>/clojette/clojette-stdlib.src")  // adds Clojette builtins
-import_code("/home/<user>/clojette/clojette-core.src")    // eval, parse etc
-import_code("/home/<user>/clojette/clojette-interop.src") // registers native GH functions
+import_code("/home/<user>/clojette-dev/clojette-env.src")     // sets up globalEnv + natives = {}
+import_code("/home/<user>/clojette-dev/clojette-stdlib.src")  // adds Clojette builtins
+import_code("/home/<user>/clojette-dev/clojette-core.src")    // eval, parse etc
+import_code("/home/<user>/clojette-dev/clojette-interop.src") // registers native GH functions
 
 // boot the stdlib
+// TODO: move to a set place in the filesystem.
 macros = "(import ./macros.lisp)"
 stdlib = "(import ./stdlib.lisp)"
 tests = "(import ./tests.lisp)"
@@ -41,5 +42,14 @@ while true
     input = user_input("Clojette> ")
     if input == "exit" or input == "quit" or input == "q" then break
     result = eval(parse(input), globalEnv)
-    print(result)
+    if isError(@result) then
+      print("ERROR: " + result["message"])
+      if result.hasIndex("trace") and result["trace"].len > 0 then
+        for frame in result["trace"]
+          print(frame)
+        end for
+      end if
+    else
+      print(result)
+    end if
 end while

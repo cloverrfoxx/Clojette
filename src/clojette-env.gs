@@ -20,21 +20,21 @@ makeEnv = function(outerEnv)
     e = {}
     e.locals = {}
     e.get = function(name)
-        if self.locals.hasIndex(name) then return @self.locals[name]
-        if outerEnv != null then return outerEnv.get(name)
-        return lispError("Undefined in the env: " + name)
+      if self.locals.hasIndex(name) then return @self.locals[name]
+      if outerEnv != null then return outerEnv.get(name)
+      return lispError("Undefined in the env: " + name)
     end function
     e.set = function(name, value)
         self.locals[name] = @value
     end function
-	e.setExisting = function(name, value)
+    e.setExisting = function(name, value)
     	if self.locals.hasIndex(name) then
-        	self.locals[name] = value
-        	return @value
+        self.locals[name] = value
+        return @value
     	end if
     	if outerEnv != null then return outerEnv.setExisting(name, @value)
     	return lispError("Cannot set! undefined variable: " + name)
-	end function
+	  end function
     return e
 end function
 
@@ -92,4 +92,7 @@ globalEnv = makeEnv(null)
 globalEnv.locals["__recur_sentinel__"] = {"classID": "recur", "args": null}
 globalEnv.locals["__gensym_counter__"] = 0
 globalEnv.locals["macros"] = {}
+globalEnv.locals["__namespaces__"] = {"user": {}}
+globalEnv.locals["__current_ns__"] = "user"
+globalEnv.locals["__ns_aliases__"] = {"user": {}}
 globalEnv.natives = {}
