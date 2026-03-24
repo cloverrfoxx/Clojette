@@ -70,16 +70,18 @@ end function
 
 globalEnv.locals["/"] = function(args)
     if args.len == 0 then return lispError("/ requires at least 1 argument")
-    if args.len == 1 then return 1.0 / args[0]
-    result = args[0]
-    if args.len > 1 then
-        for i in range(1, args.len-1)
-            if args[i] == 0 then return lispError("Division by zero")
-            result = result / args[i]
-        end for
+    if args.len == 1 then
+        if args[0] == 0 then return lispError("Division by zero")
+        return 1 / args[0]
     end if
+    result = args[0]
+    for i in range(1, args.len-1)
+        if args[i] == 0 then return lispError("Division by zero")
+        result = result / args[i]
+    end for
     return result
 end function
+ 
 
 globalEnv.locals["%"] = function(args)
     if args.len != 2 then return lispError("% requires exactly 2 arguments")

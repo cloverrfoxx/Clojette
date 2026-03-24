@@ -1,6 +1,6 @@
 # Clojette Language Reference
 
-Clojette is a Clojure-inspired Lisp that runs inside [GreyHack](https://greyhackgame.com/), implemented in GreyScript/MiniScript. If you've never written Lisp before, don't worry, because this document starts from the basics. If you already know Clojure, skip ahead to [Differences from Clojure](#differences-from-clojure).
+Clojette is a Clojure-inspired Lisp that runs inside [GreyHack](https://greyhackgame.com/), implemented in GreyScript/MiniScript. If you've never written Lisp before, don't worry, because this document starts from the basics. If you already know Clojure, feel free to skip ahead to [Differences from Clojure](#differences-from-clojure).
 
 ---
 

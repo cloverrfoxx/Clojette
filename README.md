@@ -8,69 +8,9 @@ I made Clojette in around 4 days. As you all know, GreyHack uses MiniScript as i
 To run the language, copy `all.gs` into your game environment. Then build `all.gs`, and you'll have a Clojette runtime. To modify what files Clojette runs, you can easily modify it to load any file you want. Alternatively, you can use the REPL to import files using the `import` special form like this; `(import "/path/to/file.clj")`. In the future (possibly as early as 1.0.1) I will add better runtime usage. Currently the language includes the runtime and the standard library, along with the test suite.
 
 # Syntax
-Here's a bit of info on the syntax of Clojette. For more info, visit `DOCS.md`. Alternatively, go read the [Clojure documentation](https://www.clojure.org/guides/learn/clojure).
+For info on the syntax, refer to `DOCS.md`. It has comprehensive details on the language, its syntax, and its differences to Clojure.
 
-## Atoms
-Atoms are a very basic data structure in any Lisp. Atoms cover numerals, strings, booleans, and keywords. Keywords are special in the sense that they are self-evaluating.
-
-## Lists and Vectors.
-Everything in Clojette is made of lists. Lists are the basic data structure you will work with all the time in Clojette. A list can be instantiated with the `(...)` syntax. The first element of a list is always the callable. Callable is a function, or anything else that can be called. `(+ 1 2 3)` is a list, where + is the function to be called, and 1, 2, and 3 are the arguments to the function. Simple enough.
-
-The other very special data structure is Vectors. Vectors are instantiated with the `[...]` syntax. Vectors are a data structure, and are used for example when you define functions.
-
-## Defining functions
-`defn` defines a function. It is a macro that combines `def` and `fn`. `fn` defines an anonymous function.
-
-## let
-`let` is a special form that lets you bind vectors as such: `(let [x 1 y 2] ...)`. Big deal.
-
-## do
-`do` is a special form for sequencing things. You can use `do` as such: `(do (x))`.
-
-## if
-`if` Works the exact same way as in Clojure.
-`if` is the most important conditional expression - it consists of a condition, a "then", and an "else". `if` will only evaluate the branch selected by the conditional.
-```clojure
-=> (str "2 is " (if (even? 2) "even" "odd"))
-2 is even
-```
-
-## recur
-`recur` is used for recursion. Since GreyScript doesn't support TCO out-of-the-box, Clojette uses the same thing as Clojure does; it has a `recur` keyword for recursion! Under the hood it uses looping, but it might as well be recursion for your needs.
-
-## set!
-`set!` can be used to mutate existing bindings. Very dangerous.
-
-## try/catch
-Clojette, unlike GreyScript, has `try/catch`. This is very useful for actually writing programs. Errors are propagated through the program, all the way up to the original callsite. Pretty cool, huh?
-
-## GS Interop
-Clojette, much like Clojure, has interop with its host language. The syntax is very much similar to Clojure's interop syntax. In short Clojette uses, `.function obj args` for its interop.
-
-A simple example of Clojette interop:
-```clojure
-(-> (get_shell)
-  (.host_computer)
-  (.File "/etc/passwd")
-  (.get_content)
-  (println))
-```
-
-## Macros
-To learn about Macros, go to `DOCS.md`
-
-## Comments
-Clojette uses `;` for comments. As a convention, use `;;` for comments.
-
-## Conventions
-Speaking of conventions, there are a few conventions that Clojette has. Anything returning a boolean value should have a `?` at the end. Anything with side-effects should have a `!` at the end.
-
-For the rest, go to the actual docs, please.
-
-# Notable differences to Clojure
-Clojette isn't a 1:1 port of Clojure. Clojette is missing a few things, such as `#{}`, no `@` dereferencing yet, and no `#()` reader macro for anonymous functions, nor does it have namespaces. These might or might not be added in future updates.
-
-# TODO
+# Roadmap
 There are currently a few features that are needed.
 
 1. Runtime gensym. Macros need this.

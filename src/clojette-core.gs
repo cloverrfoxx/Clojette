@@ -406,15 +406,18 @@ eval = function(exp, env)
 		// try/catch special form in eval
 		if first == "try" then
     		body = exp[1]
-    		catchClause = exp[2]  // ["catch", ["array", "e"], handler]
     		result = eval(body, env)
     		if isError(@result) then
-        		catchEnv = makeEnv(env)
-        		catchBindings = catchClause[1]  // ["array", "e"]
+    		    if exp.len < 3 then return result
+    		    catchClause = exp[2]
+        		catchBindings = catchClause[1]
         		if catchBindings isa list and catchBindings.len > 0 and catchBindings[0] == "array" then
-            		catchBindings = catchBindings[1:]  // ["e"]
+        		    catchBindings = catchBindings[1:]
         		end if
-        		catchEnv.set(catchBindings[0], result["message"])  // bind "e" to error message
+        		catchEnv = makeEnv(env)
+        		if catchBindings.len > 0 then
+        		    catchEnv.set(catchBindings[0], result["message"])
+        		end if
         		return eval(catchClause[2], catchEnv)
     		end if
     		return result
