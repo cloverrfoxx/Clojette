@@ -28,14 +28,16 @@ import_code("/home/<user>/clojette-dev/clojette-stdlib.src")  // adds Clojette b
 import_code("/home/<user>/clojette-dev/clojette-core.src")    // eval, parse etc
 import_code("/home/<user>/clojette-dev/clojette-interop.src") // registers native GH functions
 
+tests = false
+
 // boot the stdlib
-// TODO: move to a set place in the filesystem.
-macros = "(import ./macros.lisp)"
-stdlib = "(import ./stdlib.lisp)"
-tests = "(import ./tests.lisp)"
-eval(parse(macros), globalEnv)
+// DONE: move to a set place in the filesystem.
+stdlib = "(do (import /lib/clojette/macros.clj) (import /lib/clojette/stdlib.clj))"
+tests = "(import /lib/clojette/tests.clj)"
 eval(parse(stdlib), globalEnv)
-eval(parse(tests), globalEnv)
+if tests == true then 
+	eval(parse(tests), globalEnv)
+end if
 
 // REPL
 while true
