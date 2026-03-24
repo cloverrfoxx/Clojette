@@ -1,6 +1,8 @@
 //   Copyright (C) 2026 lattiahirvio
 //
 //   This file is part of Clojette.
+//   Clojette is licensed under GPLv3 with a special linking/importing exception.
+//   See LICENSE for details.
 //
 //   Clojette is free software: you can redistribute it and/or modify
 //   it under the terms of the GNU General Public License as published by

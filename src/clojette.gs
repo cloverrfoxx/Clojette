@@ -1,6 +1,8 @@
 //   Copyright (C) 2026 lattiahirvio
 //
 //   This file is part of Clojette.
+//   Clojette is licensed under GPLv3 with a special linking/importing exception.
+//   See LICENSE for details.
 //
 //   Clojette is free software: you can redistribute it and/or modify
 //   it under the terms of the GNU General Public License as published by
@@ -14,6 +16,9 @@
 //
 //   You should have received a copy of the GNU General Public License
 //   along with Clojette. If not, see <https://www.gnu.org/licenses/>.
+
+// This is the runtime
+// Import this to embed it into your program
 
 __runtimeTag__ = function
 end function
@@ -30,28 +35,26 @@ import_code("/home/<user>/clojette-dev/clojette-interop.src") // registers nativ
 
 tests = false
 
-// boot the stdlib
-// DONE: move to a set place in the filesystem.
-stdlib = "(do (import /lib/clojette/macros.clj) (import /lib/clojette/stdlib.clj))"
-tests = "(import /lib/clojette/tests.clj)"
-eval(parse(stdlib), globalEnv)
-if tests == true then 
-	eval(parse(tests), globalEnv)
-end if
-
 // REPL
-while true
-    input = user_input("Clojette> ")
-    if input == "exit" or input == "quit" or input == "q" then break
-    result = eval(parse(input), globalEnv)
-    if isError(@result) then
-      print("ERROR: " + result["message"])
-      if result.hasIndex("trace") and result["trace"].len > 0 then
-        for frame in result["trace"]
-          print(frame)
-        end for
+repl = function()
+  while true
+      input = user_input("Clojette> ")
+      if input == "exit" or input == "quit" or input == "q" then break
+      result = eval(parse(input), globalEnv)
+      if isError(@result) then
+        print("ERROR: " + result["message"])
+        if result.hasIndex("trace") and result["trace"].len > 0 then
+          for frame in result["trace"]
+            print(frame)
+          end for
+        end if
+      else
+        print(result)
       end if
-    else
-      print(result)
-    end if
-end while
+  end while
+end function
+
+// Expose a function that evaluates code that is given to it :p
+eval_clojette = function(code, env=globalEnv)
+  return eval(parse(code), env)
+end function
