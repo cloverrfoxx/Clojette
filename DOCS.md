@@ -24,11 +24,11 @@ Clojette is a Clojure-inspired Lisp that runs inside [GreyHack](https://greyhack
 ---
 
 ## Lisp as a programming language
-Before diving into syntax, it helps to understand what makes Lisp different from most languages. This will make it easier to understand this documentation.
+Before diving into syntax, it helps to understand what makes Lisp different from most languages. Understanding that will make it easier for you (or anyone else!) to understand this documentation.
 
 In most languages, code and data are different things. You write code (`if x > 0 { ... }`), and you work with data (`[1, 2, 3]`). They look different, they behave differently, and you can't easily treat one as the other.
 
-In Lisp however, code is data. A function call like `(+ 1 2)` is just a list — the same kind of list as `[1 2 3]`. The first element happens to be a function, and the rest are arguments. That's the whole rule. This is called `homoiconicity`.
+In Lisp however, code is data. A function call like `(+ 1 2)` is just a list, the same kind of list as `[1 2 3]`. The first element happens to be a function, and the rest are arguments. That's the whole rule. This is called `homoiconicity`.
 
 This might seem like a curiosity, but leads to a powerful language. Because data is code, you can write code that writes code. This allows you, the programmer, to extend the language as its syntax.
 This is what macros are, and it's why Lisps are uniquely powerful for building abstractions. When you get to the [Macros](#macros) section, this will matter a lot.
@@ -155,6 +155,8 @@ Vectors are created with `[...]`. They are the preferred way to write literal se
 
 Internally, lists and vectors are both MiniScript lists. The distinction is syntactic: `[...]` means "this is data," while `(...)` means "call the first element as a function."
 
+Because both are the same at runtime, the only "real" difference is that `[]` gives the programmer an easier way to define a list without evaluating it. In other words, use `[...]` if you want pure data, and use `(...)` when you want to call something like a function.
+
 In the future, Vectors will be immutable, meaning they can not be changed.
 
 ### Maps
@@ -253,6 +255,8 @@ Evaluates `condition`. If truthy, evaluates and returns `then-expr`. Otherwise e
 #### Why might someone want this?
 Normally, when you write (+ 1 2), Clojette evaluates it — it calls + with 1 and 2 and returns 3. But sometimes you want the list itself, not its result. Quoting is how you say "treat this as data, don't evaluate it."
 This becomes important in two situations: creating literal lists of data, and writing macros (where you build up code as data before it runs). For everyday programming, you'll mostly use [...] vector syntax for data literals and won't need quote directly. When you start writing macros, it becomes essential.
+
+The reason for `quote`'s existance is quite simple. Internally, `[...]` expands to `(array ...)` which we don't want when making a macro. `quote` gives you the list as-is, and lets you modify it as you want. In short, `quote` exists mainly for macros.
 
 ### `set!`
 
@@ -468,6 +472,8 @@ A macro for imperative-style loops (built on `loop`/`recur`):
 ## Macros
 
 Macros are the most powerful feature of Lisp, and the most unique. They let you extend the language itself by writing code that runs at evaluation time to transform other code.
+
+Macros are an advanced-ish topic, so if this is confusing to you, don't worry! You don't need to make your own macros all the time, and beginners can most of the time ignore macros. They become important for more advanced users though, so they are worth learning eventually.
 
 ### What is a macro, and why does it matter?
 
