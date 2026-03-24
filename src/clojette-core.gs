@@ -30,8 +30,8 @@ end function
 // We can check if a given result is an error; we want error handling
 isError = function(val)
   if not @val isa map then return false
-	if @val.hasIndex("classID") and @val["classID"] == "error" then
-    // We know that the op is a map, and potentially is an error; safe to handle without deref 
+  // We know that the op is a map, and potentially is an error; safe to handle without deref 
+  if @val.hasIndex("classID") and @val["classID"] == "error" then
     if not @val.hasIndex("__tag__") then return false
     return @val["__tag__"] == @__runtimeTag__
   end if
@@ -69,14 +69,14 @@ callFunction = function(op, args, name, isNative=false)
                 end for
                 // check if recur was signalled
                 if result isa map and result.hasIndex("classID") and result["classID"] == "recur" then
-                    args = result["args"]  // loop with new args
+                    args = result["args"]
                 else
-                    return result  // done
+                    return result
                 end if
             end while
         end if
     end if
-    
+
     // funcRef - either stdlib or native MiniScript
     if @op isa funcRef or typeof(@op) == "function" then
         if isNative then
@@ -195,15 +195,12 @@ end function
 //  Is recursive
 //
 readFromTokens = function(tokens)
-    //print("We are in readFromTokens")
-    //print("Tokens in readFromTokens are: " + tokens)
     // We don't want an empty list
     if tokens.len == 0 then return lispError("Unexpected EOF")
     // We also dont want anything that is NOT a list
     if not @tokens isa list then return lispError("Not a list")
     token = tokens.pull
     
-    //print("Token is " + token)
     // We encountered a symbol, parse it recursively
 	  if token == "(" then
     	L = []
@@ -442,13 +439,12 @@ eval = function(exp, env)
 		end if
 	
 		if first == "and" then
-    		if exp.len == 1 then return true  // (and) with no args
     		result = true
 			  if exp.len > 1 then
     			for i in range(1, exp.len-1)
         		result = eval(exp[i], env)
 					if isError(@result) then return result
-        		if not result then return false  // short circuit
+					if not result then return result
     			end for
 			  end if
     		return result
@@ -549,8 +545,6 @@ eval = function(exp, env)
     	end for
 		end if
 		isNative = globalEnv.natives.hasIndex(first)
-		//print("op type: " + typeof(@op))
-		//print("op value: " + @op)
     res = callFunction(@op, @args, @first, isNative)
     if isError(@res) then return addTrace(@res, " in " + first)
 		return res
