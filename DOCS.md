@@ -122,7 +122,7 @@ nil
 ```
 
 ### Keywords
-Keywords start with : and always evaluate to themselves — they are their own value. They are most commonly used as map keys or as sentinel values in cond.
+Keywords start with : and always evaluate to themselves - they are their own value. They are most commonly used as map keys or as sentinel values in cond.
 
 ```clojure
 :name
