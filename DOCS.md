@@ -240,7 +240,7 @@ Evaluates `condition`. If truthy, evaluates and returns `then-expr`. Otherwise e
 (if false "yes")          ;; -> null
 ```
 
-> Falsy values in Clojette: false and null/nil are falsy, as you'd expect. However, because Clojette runs on MiniScript, 0 and "" (empty string) are also falsy. This differs from standard Clojure, where only false and nil are falsy. Be careful when using if with numbers or strings that might be zero or empty.
+> Falsy values in Clojette: false and 0 are falsy, as you'd expect. Because Clojette runs on MiniScript, it inherits the MiniScript truthiness. This differs from standard Clojure, where false *and* nil are falsy. Be careful when using if with numbers that might be zero. MiniScript also implements T-norm fuzzy logic, which is beyond the scope of this documentation.
 
 ### `quote`
 
