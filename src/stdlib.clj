@@ -117,4 +117,4 @@
 (defn identity [x] x)
 (defn constantly [x] (fn [& _] x))
 (defn complement [f] (fn [& args] (not (apply f args))))
-(defn comp [f g] (fn [x] (f (g x)))
+(defn comp [f g] (fn [x] (f (g x))))
