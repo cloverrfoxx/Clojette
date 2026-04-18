@@ -555,6 +555,17 @@ In production macros, use `gensym` for any local bindings:
        (set! ~b ~tmp-name))))
 ```
 
+You can also use the `symbol#` reader macro. Adding a `#` after a symbol generates a macro for it automatically. The earlier macro can be implemented like this;
+```clojure
+(defmacro swap! [a b]
+  (let [tmp-name tmp#)]
+    `(let [~tmp-name ~a]
+       (set! ~a ~b)
+       (set! ~b ~tmp-name))))
+```
+
+Reader macros are essentially macros but for the reader. They simply add shorthands and syntax sugar.
+
 ### How macros are looked up
 
 Macros are stored in a global registry separate from the regular environment. When the evaluator encounters a list whose first element is a known macro name, it calls the macro with the unevaluated argument forms, then evaluates the result. This means macros are checked before regular function dispatch.

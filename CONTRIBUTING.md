@@ -24,7 +24,7 @@ The code lives in `/src/`. You might see `all.gs`, and might be tempted to modif
 Clojette has style guidlines that should be followed at all times. Following these style guidlines helps when others read your code.
 
 ## GreyScript
-Clojette follows the GreyScript-specific conventions. GreyScript functions and variables should use camelCase. Any time you handle a function, you MUST dereference it with `@`. That will call the function, which you might not want.
+Clojette follows the GreyScript-specific conventions. GreyScript functions and variables should use camelCase. Any time you handle a function, you MUST dereference it with `@`. If you do not, it will call the function, which you might not want.
 
 Additionally, some objects have a classID tagging convention. Currently we have four of these; `fn`, `recur`, `native`, and `error`. New runtime objects should follow the same pattern. New objects should also use the `@__runtimeTag__` sentinel. The sentinel is used, so that user input cannot falsely masquerade as runtime objects.
 

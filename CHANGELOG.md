@@ -1,3 +1,14 @@
+# 1.0.2
+WIP, not a full release, but I am throwing changes here as they come.
+
+## Additions
+- Better docs! Go look at them!
+- Moved stdlib to `/lib/clojette/*`
+- Relicensed Clojette. Now you may link the library...
+- More reader macros! Now with `x#` (auto-gensym), `#()` (anonymous functions), and map definitions through {}.
+- Did I mention better map support? It was even mentioned in the docs before this behavior was in the language -.-
+- TODO: Add other changes that get made!
+
 # 1.0.1
 Small update!
 

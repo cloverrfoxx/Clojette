@@ -18,13 +18,12 @@ For info on the syntax, refer to `DOCS.md`. It has comprehensive details on the 
 # Roadmap
 There are currently a few features that are needed.
 
-1. Runtime gensym. Macros need this.
-2. Runtime macroexpand.
-3. Persistent vectors. I am quite sure that other peristent data structures could be useful too.
-4. `#{}`, `@` deref, and `#()` reader macros.
-5. Expose `eval()` to the user.
-6. Stronger protections in the stdlib, possibly through a `guard` function. Maybe takes in `type`, `amount`, `@args`?
-7. Fix any crashes, the Clojette runtime shouldn't crash, instead it should error out gracefully
+1. Runtime macroexpand.
+2. Persistent vectors. I am quite sure that other peristent data structures could be useful too.
+3. `#{}`, `@` deref. Other reader macros too if someone wants...
+4. Expose `eval()` to the user. (Sidenote: this is exposed in the Clojette library... eval() isnt a special form though)
+5. Stronger protections in the stdlib, possibly through a `guard` function. Maybe takes in `type`, `amount`, `@args`?
+6. Fix any crashes, the Clojette runtime shouldn't crash, instead it should error out gracefully
 
 # Contributing
 Pull requests are welcome. To get to know the ins and outs of contributing, check out `CONTRIBUTING.md`. Also make sure to run the tests before making a pull requests. All tests should pass, and if they do not pass, any PR will not be accepted. To make sure regressions do not happen, the test suite MUST pass before a PR is accepted.
