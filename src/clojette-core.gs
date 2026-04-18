@@ -159,7 +159,7 @@ tokenize = function(chars)
     		end if
     		tok = tok + """"
     		tokens.push(tok)
-        else if c == "(" or c == ")" or c == "[" or c == "]" then
+        else if c == "(" or c == ")" or c == "[" or c == "]" or c == "{" or c == "}" then
           tokens.push(c)
         else if c == "~" then
           if i + 1 < chars.len and chars[i+1] == "@" then
@@ -192,9 +192,10 @@ end function
 
 
 //  @Doc
-//  Takes in a list
-//  Reads tokens
-//  Is recursive
+//  This is the reader. The reader takes in a list of tokens
+//  and then reads those tokens recursively. The reader 
+//  mutates the tokens for some syntax sugar.
+//  Macros depend on this, for example.
 //
 readFromTokens = function(tokens)
     // We don't want an empty list
@@ -215,7 +216,8 @@ readFromTokens = function(tokens)
     	tokens.pull  // consume the )
     	return L
 
-  else if token == "[" then
+    // Handle arrays
+    else if token == "[" then
       L = []
       while tokens.len > 0 and tokens[0] != "]"
           item = readFromTokens(tokens)
@@ -225,11 +227,38 @@ readFromTokens = function(tokens)
       if tokens.len == 0 then return lispError("Unexpected EOF while reading vector")
       tokens.pull  // consume the ]
       return ["array"] + L
+
+    // Handle hash maps
+    else if token == "{" then
+      L = []
+      while tokens.len > 0 and tokens[0] != "}"
+          item = readFromTokens(tokens)
+          if isError(@item) then return item
+          L.push(item)
+      end while
+      if tokens.len == 0 then return lispError("Unexpected EOF while reading map")
+      tokens.pull  // consume the }
+      return ["hash-map"] + L
       
       else if token == ")" then
   		return lispError("Unexpected )")
       else if token == "]" then
         return lispError("Unexpected ]")
+      else if token == "}" then
+        return lispError("Unexpected }")
+
+    // Handle syntax sugar for anonymous functions...
+    else if token == "#" then
+      if tokens[0] == "(" then
+        tokens.pull // consume (
+        expr = readFromTokens(tokens)
+        if @isError(@expr) then return expr
+        if tokens[0] != ")" then return lispError("Expected ) after #(...)")
+        tokens.pull  // consume )
+        return ["fn", expr] // Return anonymous function.
+      end if
+      // In the future, if I need other # forms, they are added here.
+
   
     // quote tokens for macroing around
   	else if token == "'" then
@@ -248,6 +277,8 @@ readFromTokens = function(tokens)
       inner = readFromTokens(tokens)
       if isError(@inner) then return inner
       return ["unquote", inner]
+    else if token[token.len-1] == "#" then // Runtime gensym?
+      return ["gensym", token[0:token.len - 1]]
     // Return an atom, we can let the MiniScript type coercion do everything for us
     else 
   	return atom(token)
@@ -267,13 +298,12 @@ eval = function(exp, env)
 	if @exp isa number then return exp
 	if @exp == null then return null
 
-    if @exp isa list then
-      if exp.len == 0 then return exp
+  if @exp isa list then
+    if exp.len == 0 then return exp
 
-      first = exp[0]
+    first = exp[0]
 
-      // handle special forms first
-
+    // handle special forms first
 		if first == "quasiquote" then
     	return evalQuasiquote(exp[1], env)
 		end if
@@ -283,17 +313,17 @@ eval = function(exp, env)
     	methodName = first[1:]
     	obj = eval(exp[1], env)
     	if @obj == null then return lispError("null object in interop call ." + methodName)
-			if isError(@obj) then return addTrace(@obj, "in " + first) // Check for errors!    
+      if isError(@obj) then return addTrace(@obj, "in " + first) // Check for errors!    
 
     		fn = @obj[methodName]
-    
+
     		if not (@fn isa funcRef) then return @fn
-    
+
     		args = []
     		if exp.len > 2 then
         	for i in range(2, exp.len-1)
-					  result = eval(exp[i], env)
-					  if isError(@result) then return @result
+          result = eval(exp[i], env)
+          if isError(@result) then return @result
             args.push(@result)
         	end for
     		end if
@@ -305,9 +335,9 @@ eval = function(exp, env)
     		if args.len == 3 then return fn(@obj, args[0], args[1], args[2])
     		if args.len == 4 then return fn(@obj, args[0], args[1], args[2], args[3])
     		return lispError("Too many arguments for native method")
-		end if
-	
-		if first == "array" then
+    end if
+
+    if first == "array" then
     		result = []
     		if exp.len > 1 then
         		for i in range(1, exp.len-1)
@@ -316,17 +346,17 @@ eval = function(exp, env)
             		result.push(val)
         		end for
     		end if
-   		return result
-		end if
-	
-		if first == "import" then
-			path = exp[1]  // don't eval, take the raw token
+      return result
+    end if
+
+    if first == "import" then
+      path = exp[1]  // don't eval, take the raw token
     	// strip quotes if present
     	if path[0] == """" then path = path[1:-1]
 
     	//path = eval(exp[1], env)
     	hostComputer = get_shell.host_computer
-			fpath = get_abs_path(path)
+      fpath = get_abs_path(path)
     	f = hostComputer.File(fpath)
     	
       if f == null then return lispError("Error: file not found: " + path)
@@ -334,8 +364,8 @@ eval = function(exp, env)
     	contents = f.get_content
     	if contents == null then return lispError("Error: no read permission: " + path)
     	wrapped = "(do " + contents + ")"
-			result = parse(wrapped)
-			if isError(@result) then return result
+      result = parse(wrapped)
+      if isError(@result) then return result
     	return eval(result, env)
 		end if
 	
@@ -537,6 +567,16 @@ eval = function(exp, env)
     	end if
     	return {"classID": "fn", "args": params, "body": exp[2:], "env": env}
 		end if
+
+    // Handle syntax for (:x map), basically looks up stuff from maps using keywords.
+    // Very Clojure-esque.
+    if first[0] == ":" @exp[1] isa map then
+      if isError(@exp[1]) then return @exp[1] // Check if 2nd element is an error, and return early... Is this more efficient? No clue.
+      if exp[1].hasIndex(first) then return exp[1][first] 
+      // Map doesnt have index for :x, so we perform a lookup for x
+      if exp[1].hasIndex(first[1:]) then return exp[1][first[1:]]
+      return lispError("Key " + first + " not found from map " + @exp[1])
+    end if
         
 		// normal function call
 		op = eval(first, env)
@@ -575,8 +615,8 @@ eval = function(exp, env)
       	if not namespaces.hasIndex(fullNs) then return lispError("No such namespace: " + fullNs)
       	if not namespaces[fullNs].hasIndex(sym) then return lispError("No such var: " + exp)
       	return @namespaces[fullNs][sym]
-   		end if
-		end if
+      end if
+    end if
 
     	return env.get(@exp)  // walks the chain, errors if not found
     else
