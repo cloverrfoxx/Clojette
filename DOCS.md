@@ -108,8 +108,8 @@ Strings are double-quoted. Escape sequences with `\`.
 ### Booleans
 
 ```clojure
-true
-false
+true ;; actually 1
+false ;; actually 0
 ```
 
 ### Null
@@ -122,7 +122,7 @@ nil
 ```
 
 ### Keywords
-Keywords start with : and always evaluate to themselves — they are their own value. They are most commonly used as map keys or as sentinel values in cond.
+Keywords start with : and always evaluate to themselves - they are their own value. They are most commonly used as map keys or as sentinel values in cond.
 
 ```clojure
 :name
@@ -240,7 +240,7 @@ Evaluates `condition`. If truthy, evaluates and returns `then-expr`. Otherwise e
 (if false "yes")          ;; -> null
 ```
 
-> Falsy values in Clojette: false and null/nil are falsy, as you'd expect. However, because Clojette runs on MiniScript, 0 and "" (empty string) are also falsy. This differs from standard Clojure, where only false and nil are falsy. Be careful when using if with numbers or strings that might be zero or empty.
+> Falsy values in Clojette: false and 0 are falsy, as you'd expect. Because Clojette runs on MiniScript, it inherits the MiniScript truthiness. This differs from standard Clojure, where false *and* nil are falsy. Be careful when using if with numbers that might be zero. MiniScript also implements T-norm fuzzy logic, which is beyond the scope of this documentation.
 
 ### `quote`
 
@@ -879,9 +879,10 @@ Clojette is heavily inspired by Clojure but is not a complete implementation. He
 - **No keyword lookup** - `(:key map)` is not supported; use `(get map :key)` instead
 
 ### Behavioural differences
-- **Falsy values** - 0 and "" are falsy due to MiniScript's type system, unlike Clojure where only false and nil are falsy
+- **Falsy values** - 0 and `false` are falsy due to MiniScript's type system, unlike Clojure where only false and nil are falsy. `nil` is truthy in Clojette (????)
 - **`and`** returns the last value if all truthy, or the first falsy value - same as Clojure, but note there is no `&&` short-circuit returning `nil`, it returns `false` on the falsy path
 - **`or`** returns `false` (not `nil`) when no clause is truthy
+- **fuzzy logic** - Clojette inherits fuzzy T-norm logic from MiniScript. This isn't in the Clojette spec, but oh well...
 - **Vectors and lists are the same type** - `[1 2 3]` and `(list 1 2 3)` produce identical values; there is no distinction at runtime
 - **`recur` is only valid inside `loop` or `fn`** - there is no TCO for arbitrary tail calls
 - **Macros are global** - they live in a single global registry and are not namespace-scoped

@@ -5,7 +5,12 @@ Clojette is an opinionated and feature-full Clojure-like Lisp for GreyHack writt
 I made Clojette in around 4 days. As you all know, GreyHack uses MiniScript as its scripting language. I dislike the language quite a bit. What does a programmer do in that situation? He of course, makes his own... Clojette is a lisp for the simple reason that I started learning Lisp around a week ago and got the inspiration to write my own Lisp. I have been meaning to write my own language for the game for as long as I have known about the horrors of GreyScript. And so naturally, I wrote a Lisp for GreyScript. Clojette was written in around ~30 or so hours of active development time. The interpreter core was done on day 1 in around 3 hours, and additions such as macros were added on day 2. The current environment model is modelled after the Structure and Interpretation of Computer Programs (SICP) Lisp environment model. To know more, go read the book.
 
 # Running the language
-To run the language, copy `all.gs` into your game environment. Then build `all.gs`, and you'll have a Clojette runtime. By default Clojette tries to run files from `/lib/clojette`. To modify what files Clojette runs, you can easily modify it to load any file you want. Alternatively, you can use the REPL to import files using the `import` special form like this; `(import "/path/to/file.clj")`. In the future (possibly as early as 1.0.1) I will add better runtime usage. Currently the language includes the runtime and the standard library, along with the test suite.
+There are two ways to run Clojette. If all you need is a REPL environment, you can copy `all.gs` into your game environment. Alternatively, you can build the newest build of Clojette. 
+You can do that by copying each file from `/src/`into your game (or, alternatively you can use [greybel](https://github.com/ayecue/greybel-js)), and build the `clojette.gs` file - do note that you need to add the path to the other source files, since it needs to import everything. Make sure you mark the file as importable. If you need a REPL in the development version, you can build the `clojette-repl.gs`, as it imports the file you just built.
+
+> hint: name the output file `dddd` to make it the smallest possible binary
+
+Currently the language includes the runtime and the standard library, along with the test suite. The test suite isn't necessary for casual users, and so can be ignored if you aren't developing the language. The standard library is very useful for developers, and it is recommended to include it into your Clojette install.
 
 # Syntax
 For info on the syntax, refer to `DOCS.md`. It has comprehensive details on the language, its syntax, and its differences to Clojure.
@@ -16,9 +21,10 @@ There are currently a few features that are needed.
 1. Runtime gensym. Macros need this.
 2. Runtime macroexpand.
 3. Persistent vectors. I am quite sure that other peristent data structures could be useful too.
-4. Stack traces to try/catch. This is simple to add.
-5. `#{}`, `@` deref, and `#()` reader macros.
-6. Expose `eval()` to the user.
+4. `#{}`, `@` deref, and `#()` reader macros.
+5. Expose `eval()` to the user.
+6. Stronger protections in the stdlib, possibly through a `guard` function. Maybe takes in `type`, `amount`, `@args`?
+7. Fix any crashes, the Clojette runtime shouldn't crash, instead it should error out gracefully
 
 # Contributing
 Pull requests are welcome. To get to know the ins and outs of contributing, check out `CONTRIBUTING.md`. Also make sure to run the tests before making a pull requests. All tests should pass, and if they do not pass, any PR will not be accepted. To make sure regressions do not happen, the test suite MUST pass before a PR is accepted.
