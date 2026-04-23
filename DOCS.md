@@ -890,7 +890,7 @@ Clojette is heavily inspired by Clojure but is not a complete implementation. He
 - **No keyword lookup** - `(:key map)` is not supported; use `(get map :key)` instead
 
 ### Behavioural differences
-- **Falsy values** - 0 and `false` are falsy due to MiniScript's type system, unlike Clojure where only false and nil are falsy. `nil` is truthy in Clojette (????)
+- **Falsy values** - 0 and `false` are falsy due to MiniScript's type system, unlike Clojure where only false and nil are falsy. Empty lists and maps are also falsy.
 - **`and`** returns the last value if all truthy, or the first falsy value - same as Clojure, but note there is no `&&` short-circuit returning `nil`, it returns `false` on the falsy path
 - **`or`** returns `false` (not `nil`) when no clause is truthy
 - **fuzzy logic** - Clojette inherits fuzzy T-norm logic from MiniScript. This isn't in the Clojette spec, but oh well...
