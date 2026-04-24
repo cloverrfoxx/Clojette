@@ -15,6 +15,9 @@ Currently the language includes the runtime and the standard library, along with
 # Syntax
 For info on the syntax, refer to `DOCS.md`. It has comprehensive details on the language, its syntax, and its differences to Clojure.
 
+# Discord
+I made a discord for the language (by popular demand!). You can join it [here](https://discord.gg/enw48KYKAd).
+
 # Roadmap
 There are currently a few features that are needed.
 
