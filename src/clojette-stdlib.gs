@@ -28,6 +28,97 @@ globalEnv.locals["let"] = "let"
 globalEnv.locals["quote"] = "quote"
 globalEnv.locals["set!"] = "set!"
 
+// Guards
+realTypeof = function(anyObject)
+
+    if @anyObject == null then return "null"
+
+    // Custom fn object type
+    if @anyObject isa map then
+        if @anyObject.hasIndex("classID") and @anyObject["classID"] == "fn" then
+            return "function"
+        end if
+    end if
+
+    objectType = @anyObject * 0
+
+    if objectType == "" then return "string"
+    if objectType == [] then return "list"
+    if @anyObject == {} then return "map"
+
+    for i in @anyObject
+        return "map"
+    end for
+
+    if objectType == null then return "function"
+
+    return "number"
+end function
+
+checkArity = function(sig, argc)
+
+    if sig == "*" then return true
+
+    if sig[sig.len-1] == "+" then
+        min = val(sig[:-1])
+        return argc >= min
+    end if
+
+    dash = sig.indexOf("-")
+
+    if dash != null then
+        min = val(sig[:dash])
+        max = val(sig[dash+1:])
+        return argc >= min and argc <= max
+    end if
+
+    return argc == val(sig)
+end function
+
+matchesType = function(expected, actual)
+    if expected isa list then
+        for t in expected
+            if t == "all" then return true
+            if t == "any" then
+              if actual == "null" then return false
+              if actual == "function" then return false
+              return true
+            end if
+            if t == actual then return true
+        end for
+        return false
+    end if
+
+    return expected == actual
+end function
+
+guard = function(arity, types, args, argname = null, message=null)
+    argc = args.len
+
+    if not checkArity(arity, argc) then
+        if argname != null then return lispError(argname + ": invalid arity")
+        return lispError("invalid arity")
+    end if
+
+    for i in range(0, argc-1)
+        actual = realTypeof(args[i])
+
+        if i >= types.len then
+            expected = types[types.len-1]
+        else
+            expected = types[i]
+        end if
+
+        if not matchesType(expected, actual) then
+            if message == null then return lispError(message)
+            if argname != null then return lispError(argname + ": expected " + str(expected) + ", got " + actual)
+            return lispError("expected " + str(expected) + ", got " + actual)
+        end if
+    end for
+
+    return null
+end function
+
 //
 // Clojette Builtins - MiniScript host layer
 //
@@ -41,6 +132,9 @@ end function
 
 // Arithmetic
 globalEnv.locals["+"] = function(args)
+    err = guard("*", [["number", "string", "list", "map"]], args, "+")
+    if isError(err) then return err
+    
     sum = 0
     if args.len == 0 then return 0
     for i in range(0, args.len-1)
@@ -50,6 +144,9 @@ globalEnv.locals["+"] = function(args)
 end function
 
 globalEnv.locals["-"] = function(args)
+    err = guard("1+", [["number", "string"]], args, "-")
+    if isError(err) then return err
+
     if args.len == 0 then return lispError("- requires at least 1 argument")
     if args.len == 1 then return -args[0]
     result = args[0]
@@ -62,6 +159,9 @@ globalEnv.locals["-"] = function(args)
 end function
 
 globalEnv.locals["*"] = function(args)
+    err = guard("*", [["number", "string", "list"]], args, "*")
+    if isError(err) then return err
+
     prod = 1
     if args.len == 0 then return 1
     for i in range(0, args.len-1)
@@ -71,6 +171,9 @@ globalEnv.locals["*"] = function(args)
 end function
 
 globalEnv.locals["/"] = function(args)
+    err = guard("1+", [["number", "string", "list"]], args, "/")
+    if isError(err) then return err
+      
     if args.len == 0 then return lispError("/ requires at least 1 argument")
     if args.len == 1 then
         if args[0] == 0 then return lispError("Division by zero")
@@ -83,26 +186,33 @@ globalEnv.locals["/"] = function(args)
     end for
     return result
 end function
- 
 
 globalEnv.locals["%"] = function(args)
-    if args.len != 2 then return lispError("% requires exactly 2 arguments")
+    err = guard("2", ["number"], args, "%")
+    if isError(err) then return err
+
     if args[1] == 0 then return lispError("Modulo by zero")
     return args[0] % args[1]
 end function
 
 globalEnv.locals["mod"] = function(args)
-    if args.len != 2 then return lispError("mod requires exactly 2 arguments")
+    err = guard("2", ["number"], args, "mod")
+    if isError(err) then return err
+
     if args[1] == 0 then return lispError("Modulo by zero")
     return args[0] % args[1]
 end function
 
 globalEnv.locals["**"] = function(args)
-    if args.len != 2 then return lispError("** requires exactly 2 arguments")
+    err = guard("2", ["number"], args, "**")
+    if isError(err) then return err
     return args[0] ^ args[1]
 end function
 
 globalEnv.locals["quot"] = function(args)
+    err = guard("2", ["number"], args, "quot")
+    if isError(err) then return err
+
     if args.len != 2 then return lispError("quot requires exactly 2 arguments")
     if args[1] == 0 then return lispError("Division by zero")
     return floor(args[0] / args[1])
@@ -110,7 +220,9 @@ end function
 
 // Comparison
 globalEnv.locals["="] = function(args)
-    if args.len < 2 then return lispError("= requires at least 2 arguments")
+    err = guard("2+", ["any"], args)
+    if isError(err) then return err
+
     for i in range(1, args.len-1)
         if args[i] != args[0] then return false
     end for
@@ -118,12 +230,14 @@ globalEnv.locals["="] = function(args)
 end function
 
 globalEnv.locals["not="] = function(args)
-    if args.len != 2 then return lispError("not= requires exactly 2 arguments")
+    err = guard("2", ["any"], args)
+    if isError(err) then return err
     return args[0] != args[1]
 end function
 
 globalEnv.locals["<"] = function(args)
-    if args.len < 2 then return lispError("< requires at least 2 arguments")
+    err = guard("2+", ["any"], args)
+    if isError(err) then return err
     for i in range(1, args.len-1)
         if args[i-1] >= args[i] then return false
     end for
@@ -131,7 +245,8 @@ globalEnv.locals["<"] = function(args)
 end function
 
 globalEnv.locals[">"] = function(args)
-    if args.len < 2 then return lispError("> requires at least 2 arguments")
+    err = guard("2+", ["any"], args)
+    if isError(err) then return err
     for i in range(1, args.len-1)
         if args[i-1] <= args[i] then return false
     end for
@@ -139,7 +254,8 @@ globalEnv.locals[">"] = function(args)
 end function
 
 globalEnv.locals["<="] = function(args)
-    if args.len < 2 then return lispError("<= requires at least 2 arguments")
+    err = guard("2+", ["any"], args)
+    if isError(err) then return err
     for i in range(1, args.len-1)
         if args[i-1] > args[i] then return false
     end for
@@ -147,7 +263,8 @@ globalEnv.locals["<="] = function(args)
 end function
 
 globalEnv.locals[">="] = function(args)
-    if args.len < 2 then return lispError(">= requires at least 2 arguments")
+    err = guard("2+", ["any"], args)
+    if isError(err) then return err
     for i in range(1, args.len-1)
         if args[i-1] < args[i] then return false
     end for
@@ -155,71 +272,86 @@ globalEnv.locals[">="] = function(args)
 end function
 
 globalEnv.locals["not"] = function(args)
+    err = guard("1", ["any"], args)
+    if isError(err) then return err
     if args.len != 1 then return lispError("not requires exactly 1 argument")
     return not args[0]
 end function
 
 // List operations
 globalEnv.locals["list"] = function(args)
-	if args == null then return lispError("Args for list is null!")
+  err = guard("*", ["any"], args, "list")
+  if isError(err) then return err
   return [] + args
 end function
 
 globalEnv.locals["car"] = function(args)
-    if args.len != 1 then return lispError("car requires exactly 1 argument")
+    err = guard("1", ["list"], args, "car")
+    if isError(err) then return err
+
     lst = args[0]
     if lst == null or lst.len == 0 then return lispError("car called on empty list")
     return lst[0]
 end function
 
 globalEnv.locals["cdr"] = function(args)
-    if args.len != 1 then return lispError("cdr requires exactly 1 argument")
+    err = guard("1", ["list"], args, "cdr")
+    if isError(err) then return err
+
     lst = args[0]
-    if lst == null or lst.len == 0 then return []  // was: lispError
-    if lst.len == 1 then return []
+    if len(lst) <= 1 then return []
     return lst[1:]
 end function
 
 globalEnv.locals["cons"] = function(args)
-    if args.len != 2 then return lispError("cons requires exactly 2 arguments")
+    err = guard("2", ["any", ["list", "null"]], args, "cons")
     if args[1] == null then return [args[0]]
     return [args[0]] + args[1]
 end function
 
 globalEnv.locals["first"] = function(args)
-    if args.len != 1 then return lispError("first requires exactly 1 argument")
+    err = guard("1", ["list"], args, "first")
+    if isError(err) then return err
+
     lst = args[0]
     if lst == null or lst.len == 0 then return null
     return lst[0]
 end function
 
 globalEnv.locals["second"] = function(args)
-    if args.len != 1 then return lispError("second requires exactly 1 argument")
+    err = guard("1", ["list"], args, "second")
+    if isError(err) then return err
+
     lst = args[0]
-    if lst == null or lst.len < 2 then return null
+    if lst == null then return null
     return lst[1]
 end function
 
 globalEnv.locals["rest"] = function(args)
-    if args.len != 1 then return lispError("rest requires exactly 1 argument")
+    err = guard("1", ["list"], args, "rest")
+    if isError(err) then return err
+
     lst = args[0]
-    if lst == null or lst.len <= 1 then return []
+    if lst.len <= 1 then return []
     return lst[1:]
 end function
 
 globalEnv.locals["conj"] = function(args)
-    if args.len < 2 then return lispError("conj requires at least 2 arguments")
+    err = guard("2+", [["list", "null"], "any"], args, "conj")
+    if isError(err) then return err
+
     result = args[0]
     if result == null then result = []
-    if args.len > 1 then
-        for i in range(1, args.len-1)
-            result = result + [args[i]]
-        end for
-    end if
+    for i in range(1, args.len-1)
+      result = result + [args[i]]
+    end for
     return result
 end function
 
 globalEnv.locals["concat"] = function(args)
+    err = guard("*", [["list", "null"]], args, "concat")
+    if isError(err) then return err
+
     result = []
     if args.len == 0 then return result
     for i in range(0, args.len-1)
@@ -229,26 +361,30 @@ globalEnv.locals["concat"] = function(args)
 end function
 
 globalEnv.locals["empty?"] = function(args)
-	if isError(args) then return args
-    if args.len != 1 then return lispError("empty? requires exactly 1 argument")
+    err = guard("1",[["list", "string", "map", "null"]], args, "empty?")
+    if isError(err) then return err
+
     lst = args[0]
     if lst == null then return true
     return lst.len == 0
 end function
 
 globalEnv.locals["count"] = function(args)
-    if args.len != 1 then return lispError("count requires exactly 1 argument")
-    if args[0] == null then return 0
+    err = guard("1", [["list", "string", "map"]], args, "count")
+    if isError(err) then return err
     return args[0].len
 end function
 
 globalEnv.locals["list?"] = function(args)
-    if args.len != 1 then return lispError("list? requires exactly 1 argument")
+    err = guard("1", ["any"], args, "list?")
+    if isError(err) then return err
     return args[0] isa list
 end function
 
 globalEnv.locals["nth"] = function(args)
-    if args.len != 2 then return lispError("nth requires exactly 2 arguments")
+    err = guard("2", ["list", "number"], args, "nth")
+    if isError(err) then return err
+
     lst = args[0]
     n = args[1]
     if lst == null or n >= lst.len then return lispError("nth index out of bounds")
@@ -256,7 +392,9 @@ globalEnv.locals["nth"] = function(args)
 end function
 
 globalEnv.locals["get"] = function(args)
-    if args.len < 2 then return lispError("get requires at least 2 arguments")
+    err = guard("2-3", [["list", "map", "string", "null"], "any", "any"], args, "get")
+    if isError(err) then return err
+
     coll = args[0]
     key = args[1]
     if coll == null then return null
@@ -269,6 +407,9 @@ end function
 
 // Map/dict operations
 globalEnv.locals["hash-map"] = function(args)
+    err = guard("*", ["any"], args, "hash-map")
+    if isError(err) then return err
+
     result = {}
     if args.len == 0 then return result
     if args.len % 2 != 0 then return lispError("hash-map requires even number of arguments")
@@ -279,37 +420,38 @@ globalEnv.locals["hash-map"] = function(args)
 end function
 
 globalEnv.locals["assoc"] = function(args)
-    if args.len < 3 then return lispError("assoc requires at least 3 arguments")
+    err = guard("3+", [["map", "null"], "any"], args, "assoc")
+    if isError(err) then return err
     result = {}
     if args[0] != null then
         for kv in args[0]
             result[kv.key] = @kv.value
         end for
     end if
-    if args.len > 1 then
-        for i in range(1, args.len-1, 2)
-            result[args[i]] = @args[i+1]
-        end for
-    end if
+    for i in range(1, args.len-1, 2)
+        result[args[i]] = @args[i+1]
+    end for
     return result
 end function
 
 globalEnv.locals["dissoc"] = function(args)
-    if args.len < 2 then return lispError("dissoc requires at least 2 arguments")
+    err = guard("2+", ["map", "any"], args, "dissoc")
+    if isError(err) then return err
+
     result = {}
     for kv in args[0]
         result[kv.key] = @kv.value
     end for
-    if args.len > 1 then
-        for i in range(1, args.len-1)
-            result.remove(args[i])
-        end for
-    end if
+    for i in range(1, args.len-1)
+        result.remove(args[i])
+    end for
     return result
 end function
 
 globalEnv.locals["keys"] = function(args)
-    if args.len != 1 then return lispError("keys requires exactly 1 argument")
+    err = guard("1", [["map", "null"]], args, "keys")
+    if isError(err) then return err
+
     if args[0] == null then return []
     result = []
     for kv in args[0]
@@ -319,7 +461,9 @@ globalEnv.locals["keys"] = function(args)
 end function
 
 globalEnv.locals["vals"] = function(args)
-    if args.len != 1 then return lispError("vals requires exactly 1 argument")
+    err = guard("1", [["map", "null"]], args, "vals")
+    if isError(err) then return err
+
     if args[0] == null then return []
     result = []
     for kv in args[0]
@@ -329,11 +473,15 @@ globalEnv.locals["vals"] = function(args)
 end function
 
 globalEnv.locals["map?"] = function(args)
+    err = guard("1", ["all"], args, "map?")
+    if isError(err) then return err
+    
     if args.len != 1 then return lispError("map? requires exactly 1 argument")
     return args[0] isa map
 end function
 
 globalEnv.locals["contains?"] = function(args)
+    err = guard("2", [["map", "list", "string", "null"], "any"], args, "contains")
     if args.len != 2 then return lispError("contains? requires exactly 2 arguments")
     if args[0] == null then return false
     return args[0].hasIndex(args[1])
@@ -341,64 +489,76 @@ end function
 
 // Type checks
 globalEnv.locals["number?"] = function(args)
-    if args.len != 1 then return lispError("number? requires exactly 1 argument")
+    err = guard("1", ["all"], args, "number?")
+    if isError(err) then return err
     return args[0] isa number
 end function
 
 globalEnv.locals["string?"] = function(args)
-    if args.len != 1 then return lispError("string? requires exactly 1 argument")
+    err = guard("1", ["all"], args, "string?")
+    if isError(err) then return err
     return args[0] isa string
 end function
 
 globalEnv.locals["null?"] = function(args)
-    if args.len != 1 then return lispError("null? requires exactly 1 argument")
+    err = guard("1", ["all"], args, "null?")
+    if isError(err) then return err
     return args[0] == null
 end function
 
 globalEnv.locals["fn?"] = function(args)
-    if args.len != 1 then return lispError("fn? requires exactly 1 argument")
+    err = guard("1", ["all"], args, "fn?")
+    if isError(err) then return err
     if args[0] isa funcRef then return true
     return args[0] isa map and args[0].hasIndex("classID") and args[0]["classID"] == "fn"
 end function
 
 globalEnv.locals["true?"] = function(args)
-    if args.len != 1 then return lispError("true? requires exactly 1 argument")
+    err = guard("1", ["all"], args, "true?")
+    if isError(err) then return err
     return args[0] == true
 end function
 
 globalEnv.locals["false?"] = function(args)
-    if args.len != 1 then return lispError("false? requires exactly 1 argument")
+    err = guard("1", ["all"], args, "false?")
+    if isError(err) then return err
     return args[0] == false
 end function
 
 // Math
 globalEnv.locals["floor"] = function(args)
-    if args.len != 1 then return lispError("floor requires exactly 1 argument")
+    err = guard("1", ["number"], args)
+    if isError(err) then return err
     return floor(args[0])
 end function
 
 globalEnv.locals["ceil"] = function(args)
-    if args.len != 1 then return lispError("ceil requires exactly 1 argument")
+    err = guard("1", ["number"], args)
+    if isError(err) then return err
     return ceil(args[0])
 end function
 
 globalEnv.locals["round"] = function(args)
-    if args.len != 1 then return lispError("round requires exactly 1 argument")
+    err = guard("1", ["number"], args)
+    if isError(err) then return err
     return round(args[0])
 end function
 
 globalEnv.locals["abs"] = function(args)
-    if args.len != 1 then return lispError("abs requires exactly 1 argument")
+    err = guard("1", ["number"], args)
+    if isError(err) then return err
     return abs(args[0])
 end function
 
 globalEnv.locals["sqrt"] = function(args)
-    if args.len != 1 then return lispError("sqrt requires exactly 1 argument")
+    err = guard("1", ["number"], args)
+    if isError(err) then return err
     return sqrt(args[0])
 end function
 
 globalEnv.locals["max"] = function(args)
-    if args.len < 1 then return lispError("max requires at least 1 argument")
+    err = guard("1+", ["number"], args)
+    if isError(err) then return err
     result = args[0]
     if args.len > 1 then
         for i in range(1, args.len-1)
@@ -409,7 +569,8 @@ globalEnv.locals["max"] = function(args)
 end function
 
 globalEnv.locals["min"] = function(args)
-    if args.len < 1 then return lispError("min requires at least 1 argument")
+    err = guard("1+", ["number"], args)
+    if isError(err) then return err
     result = args[0]
     if args.len > 1 then
         for i in range(1, args.len-1)
@@ -421,6 +582,8 @@ end function
 
 // String operations
 globalEnv.locals["str"] = function(args)
+    err = guard("*", ["all"], args)
+    if isError(err) then return err
     result = ""
     if args.len == 0 then return result
     for i in range(0, args.len-1)
@@ -430,44 +593,52 @@ globalEnv.locals["str"] = function(args)
 end function
 
 globalEnv.locals["split"] = function(args)
-    if args.len != 2 then return lispError("split requires exactly 2 arguments")
+    err = guard("2", ["string", "string"], args)
+    if isError(err) then return err
     return args[0].split(args[1])
 end function
 
 globalEnv.locals["join"] = function(args)
-  if @args.len != 2 then return lispError("join requires exactly 2 arguments")
-  if typeof(@args) != "list" then return lispError("Expected a list, got " + typeof(@args))
-  return args[0].join(args[1])
+    err = guard("2", ["list", "string"], args)
+    if isError(err) then return err
+    return args[0].join(args[1])
 end function
 
 globalEnv.locals["trim"] = function(args)
-    if args.len != 1 then return lispError("trim requires exactly 1 argument")
+    err = guard("1", ["string"], args)
+    if isError(err) then return err
     return args[0].trim
 end function
 
 globalEnv.locals["index-of"] = function(args)
+    err = guard("2", ["string", "string"], args)
+    if isError(err) then return err
     if args.len != 2 then return lispError("index-of requires exactly 2 arguments")
     return args[0].indexOf(args[1])
 end function
 
 globalEnv.locals["subs"] = function(args)
-    if args.len < 2 then return lispError("subs requires at least 2 arguments")
+    err = guard("2-3", ["string", "number", "number"], args)
+    if isError(err) then return err
     if args.len == 2 then return args[0][args[1]:]
     return args[0][args[1]:args[2]]
 end function
 
 globalEnv.locals["upper-case"] = function(args)
-    if args.len != 1 then return lispError("upper-case requires exactly 1 argument")
+    err = guard("1", ["string"], args)
+    if isError(err) then return err
     return args[0].upper
 end function
 
 globalEnv.locals["lower-case"] = function(args)
-    if args.len != 1 then return lispError("lower-case requires exactly 1 argument")
+    err = guard("1", ["string"], args)
+    if isError(err) then return err
     return args[0].lower
 end function
 
 globalEnv.locals["replace"] = function(args)
-    if args.len != 3 then return lispError("replace requires exactly 3 arguments")
+    err = guard("3", ["string", "string", "string"], args)
+    if isError(err) then return err
     haystack = args[0]
     needle = args[1]
     replacement = args[2]
@@ -496,26 +667,32 @@ end function
 
 // Apply - needed for higher order functions
 globalEnv.locals["apply"] = function(args)
-    if args.len != 2 then return lispError("apply requires exactly 2 arguments")
+    err = guard("2", ["function", "list"], args)
+    if isError(err) then return err
     fn = @args[0]
     argList = args[1]
-    if not argList isa list then return lispError("apply requires a list as second argument")
     return callFunction(@fn, argList, "apply")
 end function
 
 globalEnv.locals["take-keys"] = function(args)
+    err = guard("1", ["any"], args)
+    if isError(err) then return err
+
     bindings = args[0]
-    if bindings isa list and bindings.len > 0 and bindings[0] == "array" then
+    if bindings isa list and len(bindings) > 0 and bindings[0] == "array" then
         bindings = bindings[1:]
     end if
     result = []
-    for i in range(0, bindings.len-1, 2)
+    for i in range(0, len(bindings)-1, 2)
         result.push(bindings[i])
     end for
     return result
 end function
 
 globalEnv.locals["take-vals"] = function(args)
+    err = guard("1", ["any"], args)
+    if isError(err) then return err
+
     bindings = args[0]
     if bindings isa list and bindings.len > 0 and bindings[0] == "array" then
         bindings = bindings[1:]
