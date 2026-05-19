@@ -147,8 +147,8 @@ clojette.globalEnv.locals["guard"] = function(args)
     arguments = args[2]
     name = null
     msg = null
-    if args.len >= 3 then name = args[3] 
-    if args.len >= 4 then msg = args[4] 
+    if args.len > 3 then name = args[3] 
+    if args.len > 4 then msg = args[4] 
 
     return clojette.guard(types, values, arguments, name, msg)
 end function

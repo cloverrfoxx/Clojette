@@ -609,6 +609,131 @@ If `body` evaluates without error, `try` returns its value. If an error is throw
 
 Errors include a stack trace that is printed at the top level if uncaught.
 
+### runtime argument validation using `guard`
+
+`guard` is a Clojette runtime function used to validate:
+
+- number of arguments (arity)
+- argument types
+
+It is **not a macro** and operates only on evaluated values.
+
+---
+
+#### Basic form
+
+```clojure
+(guard arity types args)
+```
+
+Where:
+
+- `arity` → string describing allowed argument counts
+  - `"*"` → any number of arguments
+  - `"3"` → exactly 3 arguments
+  - `"2-5"` → between 2 and 5 arguments
+  - `"1+"` → at least 1 argument
+- `types` → list of expected types per argument
+- `args` → list of actual values to validate
+
+---
+
+#### Simple example
+
+```clojure
+(guard "*" '(number) '(1 2 3))
+; => null
+
+(guard "*" ["number"] [1 2 3])
+; => null
+```
+
+Returns:
+
+- `null` → success (no error)
+
+---
+
+#### Type mismatch error
+
+```clojure
+(guard "*" '(number) '(1 "abc"))
+
+(guard "*" ["number"] [1 "abc"])
+```
+
+Returns an error like:
+
+- `expected number, got string`
+
+---
+
+#### Named errors
+
+You can pass a function/operation name for better error messages:
+
+```clojure
+(guard "*" '(number) '(1 "abc") "add")
+
+(guard "*" ["number"] [1 "abc"] "add")
+```
+
+Result:
+
+- `add: expected number, got string`
+
+---
+
+#### Custom error message
+
+```clojure
+(guard "*" '(number) '(1 "abc") "add" "invalid input to add")
+
+(guard "*" ["number"] [1 "abc"] "add" "invalid input to add")
+```
+
+Result:
+
+- `invalid input to add`
+
+---
+
+#### Quoted vs unquoted types
+
+These are equivalent:
+
+```clojure
+(guard "*" ["number"] [1 2])
+(guard "*" '(number) '(1 2))
+```
+
+Because both evaluate to runtime lists of type symbols.
+
+---
+
+#### Return value
+
+- `null` → validation passed
+- `error` → validation failed (propagated like any other Clojette error)
+
+---
+
+#### Typical usage pattern
+
+```clojure
+(def add (fn [a b]
+  (guard "2" '(number number) [a b] "add")
+  (+ a b)))
+```
+
+---
+
+#### Key idea
+
+`guard` is intended for **function boundaries**, not internal logic.
+
+It provides lightweight runtime contracts for Clojette code.
+
 ---
 
 ## Namespaces
