@@ -17,7 +17,7 @@
 //   You should have received a copy of the GNU General Public License
 //   along with Clojette. If not, see <https://www.gnu.org/licenses/>.
 
-nativeFns = {
+clojette.nativeFns = {
     "get_shell": @get_shell,
     "get_router": @get_router,
     "nslookup": @nslookup,
@@ -42,13 +42,13 @@ nativeFns = {
     "val": @val,
     "slice": @slice,
     "typeof": @typeof,
-	  "globals": @globals,
-	  "format-columns": @format_columns,
+    "globals": @globals,
+    "format-columns": @format_columns,
 }
 
-for kv in nativeFns
-    globalEnv.locals[kv.key] = @kv.value
-    globalEnv.natives[kv.key] = true
+for kv in clojette.nativeFns
+    clojette.globalEnv.locals[kv.key] = @kv.value
+    clojette.globalEnv.natives[kv.key] = true
 end for
 
 // In the future for more robust interop stuff :+1:

@@ -18,7 +18,7 @@
 //   along with Clojette. If not, see <https://www.gnu.org/licenses/>.
 
 // Environment setup, very cool.
-makeEnv = function(outerEnv)
+clojette.makeEnv = function(outerEnv)
     e = {}
     e.locals = {}
     e.get = function(name)
@@ -30,34 +30,34 @@ makeEnv = function(outerEnv)
         self.locals[name] = @value
     end function
     e.setExisting = function(name, value)
-    	if self.locals.hasIndex(name) then
+      if self.locals.hasIndex(name) then
         self.locals[name] = value
         return @value
-    	end if
-    	if outerEnv != null then return outerEnv.setExisting(name, @value)
-    	return lispError("Cannot set! undefined variable: " + name)
+      end if
+      if outerEnv != null then return outerEnv.setExisting(name, @value)
+      return lispError("Cannot set! undefined variable: " + name)
 	  end function
     return e
 end function
 
-bindArgs = function(argNames, params, baseEnv)
-    newEnv = makeEnv(baseEnv)
+clojette.bindArgs = function(argNames, params, baseEnv)
+    newEnv = self.makeEnv(baseEnv)
     
     // No args expected
     if argNames.len == 0 then
-        if params.len > 0 then
-            return lispError("Wrong number of args: expected 0, got " + params.len)
-        end if
-        return newEnv
+      if params.len > 0 then
+        return lispError("Wrong number of args: expected 0, got " + params.len)
+      end if
+      return newEnv
     end if
     
     // Find & position if present
     restIdx = null
     for i in range(0, argNames.len-1)
-        if argNames[i] == "&" then
-            restIdx = i
-            break
-        end if
+      if argNames[i] == "&" then
+        restIdx = i
+        break
+      end if
     end for
     
     if restIdx != null then
@@ -88,13 +88,13 @@ bindArgs = function(argNames, params, baseEnv)
     return newEnv
 end function
 
-Env = {}
-globalEnv = makeEnv(null)
+//clojette.Env = {}
+clojette.globalEnv = clojette.makeEnv(null)
 // In the MiniScript bootstrap, before the REPL
-globalEnv.locals["__recur_sentinel__"] = {"classID": "recur", "args": null}
-globalEnv.locals["__gensym_counter__"] = 0
-globalEnv.locals["macros"] = {}
-globalEnv.locals["__namespaces__"] = {"user": {}}
-globalEnv.locals["__current_ns__"] = "user"
-globalEnv.locals["__ns_aliases__"] = {"user": {}}
-globalEnv.natives = {}
+clojette.globalEnv.locals["__recur_sentinel__"] = {"classID": "recur", "args": null}
+clojette.globalEnv.locals["__gensym_counter__"] = 0
+clojette.globalEnv.locals["macros"] = {}
+clojette.globalEnv.locals["__namespaces__"] = {"user": {}}
+clojette.globalEnv.locals["__current_ns__"] = "user"
+clojette.globalEnv.locals["__ns_aliases__"] = {"user": {}}
+clojette.globalEnv.natives = {}

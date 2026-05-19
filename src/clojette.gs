@@ -20,12 +20,15 @@
 // This is the runtime
 // Import this to embed it into your program
 
-__runtimeTag__ = function
+// Clojette is now a class because we don't want to pollute the globals
+clojette = {}
+
+clojette.__runtimeTag__ = function
 end function
 
-lispError = function(msg)
-  if msg == null then return {"classID": "error", "__tag__": @__runtimeTag__, "message": "Null"}
-  return {"classID": "error", "__tag__": @__runtimeTag__, "message": msg}
+clojette.lispError = function(msg)
+  if msg == null then return {"classID": "error", "__tag__": self.@__runtimeTag__, "message": "Null"}
+  return {"classID": "error", "__tag__": self.@__runtimeTag__, "message": msg}
 end function
 
 import_code("/home/<user>/clojette-dev/clojette-env.src")     // sets up globalEnv + natives = {}
@@ -33,15 +36,15 @@ import_code("/home/<user>/clojette-dev/clojette-stdlib.src")  // adds Clojette b
 import_code("/home/<user>/clojette-dev/clojette-core.src")    // eval, parse etc
 import_code("/home/<user>/clojette-dev/clojette-interop.src") // registers native GH functions
 
-tests = false
+clojette.tests = false
 
 // REPL
-repl = function()
+clojette.repl = function(prompt="Clojette> ")
   while true
-      input = user_input("Clojette> ")
+      input = user_input(prompt)
       if input == "exit" or input == "quit" or input == "q" then break
-      result = eval(parse(input), globalEnv)
-      if isError(@result) then
+      result = self.eval(self.parse(input), self.globalEnv)
+      if self.isError(@result) then
         print("ERROR: " + result["message"])
         if result.hasIndex("trace") and result["trace"].len > 0 then
           for frame in result["trace"]
@@ -55,6 +58,6 @@ repl = function()
 end function
 
 // Expose a function that evaluates code that is given to it :p
-eval_clojette = function(code, env=globalEnv)
-  return eval(parse(code), env)
+clojette.eval_clojette = function(code, env=self.globalEnv)
+  return self.eval(self.parse(code), env)
 end function

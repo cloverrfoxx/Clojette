@@ -18,7 +18,7 @@
 //   along with Clojette. If not, see <https://www.gnu.org/licenses/>.
 
 // helpers
-atom = function(token)
+clojette.atom = function(token)
 	// We dereference the token to not invoke anything by accident
   if @token isa number then return token
 	if @token isa funcRef then return lispError("Tried evaluating funcRef as an atom?")
@@ -30,7 +30,7 @@ atom = function(token)
 end function
 
 // We can check if a given result is an error; we want error handling
-isError = function(val)
+clojette.isError = function(val)
   if not @val isa map then return false
   // We know that the op is a map, and potentially is an error; safe to handle without deref 
   if @val.hasIndex("classID") and @val["classID"] == "error" then
@@ -40,13 +40,13 @@ isError = function(val)
 	return false
 end function
 
-addTrace = function(err, frame)
+clojette.addTrace = function(err, frame)
     if not err.hasIndex("trace") then err["trace"] = []
     err["trace"].push(frame)
     return err
 end function
 
-isRuntimeObject = function(val)
+clojette.isRuntimeObject = function(val)
     if not @val isa map then return false
     if not val.hasIndex("__tag__") then return false
     return @val["__tag__"] == @__runtimeTag__
@@ -55,19 +55,19 @@ end function
 // There was an error here, where we were trying to check if op was a funcRef
 // that check was not dereferenced and we called it directly -_-
 // Lesson learned, always deref your functions
-callFunction = function(op, args, name, isNative=false)
-    if isError(@op) then return @op
+clojette.callFunction = function(op, args, name, isNative=false)
+    if self.isError(@op) then return @op
     
     // User-defined Clojette fn
     if @op isa map then
         if op.hasIndex("classID") and op["classID"] == "fn" then
             while true
                 newEnv = bindArgs(op["args"], args, op["env"])
-                if isError(@newEnv) then return newEnv
+                if self.isError(@newEnv) then return newEnv
                 result = null
                 for bodyExpr in op["body"]
-                    result = eval(bodyExpr, newEnv)
-                    if isError(@result) then return addTrace(@result, "in " + name)
+                    result = self.eval(bodyExpr, newEnv)
+                    if self.isError(@result) then return self.addTrace(@result, "in " + name)
                 end for
                 // check if recur was signalled
                 if result isa map and result.hasIndex("classID") and result["classID"] == "recur" then
@@ -97,7 +97,7 @@ callFunction = function(op, args, name, isNative=false)
     return lispError("Not a function: " + name)
 end function
 
-evalQuasiquote = function(exp, env)
+clojette.evalQuasiquote = function(exp, env)
     // not a list, just return it as-is (like quote)
     if not @exp isa list then return exp
     // empty list
@@ -105,8 +105,8 @@ evalQuasiquote = function(exp, env)
     
     // unquote: evaluate and return
     if exp[0] == "unquote" then
-		result = eval(exp[1], env)
-    if isError(@result) then return result
+		result = self.eval(exp[1], env)
+    if self.isError(@result) then return result
 		return result
     end if
     
@@ -115,8 +115,8 @@ evalQuasiquote = function(exp, env)
     for i in range(0, exp.len-1)
         item = exp[i]
         if item isa list and item.len > 0 and item[0] == "splice-unquote" then
-          spliced = eval(item[1], env)
-          if isError(@spliced) then return spliced
+          spliced = self.eval(item[1], env)
+          if self.isError(@spliced) then return spliced
           if not @spliced isa list then return lispError("splice-unquote requires a list, got: " + typeof(@spliced))
             if spliced.len > 0 then
               for j in range(0, spliced.len-1)
@@ -124,8 +124,8 @@ evalQuasiquote = function(exp, env)
               end for
             end if
         else
-    	    item = evalQuasiquote(@item, env)
-    		  if isError(@item) then return item
+    	    item = self.evalQuasiquote(@item, env)
+    		  if self.isError(@item) then return item
     		  result.push(@item)
         end if
     end for
@@ -133,10 +133,10 @@ evalQuasiquote = function(exp, env)
 end function
 
 // Convert a string of characters into a list of tokens
-tokenize = function(chars)
+clojette.tokenize = function(chars)
     tokens = []
     //if tokens.len == 0 then return lispError("Unexpected EOF")
-    //if isError(tokens[0]) then return tokens.pull  // propagate tokenizer errors
+    //if self.isError(tokens[0]) then return tokens.pull  // propagate tokenizer errors
     i = 0
     while i < chars.len
       c = chars[i]
@@ -197,7 +197,7 @@ end function
 //  mutates the tokens for some syntax sugar.
 //  Macros depend on this, for example.
 //
-readFromTokens = function(tokens)
+clojette.readFromTokens = function(tokens)
     // We don't want an empty list
     if tokens.len == 0 then return lispError("Unexpected EOF")
     // We also dont want anything that is NOT a list
@@ -208,8 +208,8 @@ readFromTokens = function(tokens)
 	  if token == "(" then
     	L = []
     	while tokens.len > 0 and tokens[0] != ")"
-        item = readFromTokens(tokens)
-        if isError(@item) then return item
+        item = self.readFromTokens(tokens)
+        if self.isError(@item) then return item
         L.push(item)
     	end while
     	if tokens.len == 0 then return lispError("Unexpected EOF while reading list")
@@ -220,8 +220,8 @@ readFromTokens = function(tokens)
     else if token == "[" then
       L = []
       while tokens.len > 0 and tokens[0] != "]"
-          item = readFromTokens(tokens)
-          if isError(@item) then return item
+          item = self.readFromTokens(tokens)
+          if self.isError(@item) then return item
           L.push(item)
       end while
       if tokens.len == 0 then return lispError("Unexpected EOF while reading vector")
@@ -232,8 +232,8 @@ readFromTokens = function(tokens)
     else if token == "{" then
       L = []
       while tokens.len > 0 and tokens[0] != "}"
-          item = readFromTokens(tokens)
-          if isError(@item) then return item
+          item = self.readFromTokens(tokens)
+          if self.isError(@item) then return item
           L.push(item)
       end while
       if tokens.len == 0 then return lispError("Unexpected EOF while reading map")
@@ -251,7 +251,7 @@ readFromTokens = function(tokens)
     else if token == "#" then
       if tokens[0] == "(" then
         tokens.pull // consume (
-        expr = readFromTokens(tokens)
+        expr = self.readFromTokens(tokens)
         if @isError(@expr) then return expr
         if tokens[0] != ")" then return lispError("Expected ) after #(...)")
         tokens.pull  // consume )
@@ -262,40 +262,43 @@ readFromTokens = function(tokens)
   
     // quote tokens for macroing around
   	else if token == "'" then
-    	inner = readFromTokens(tokens)
-    	if isError(@inner) then return inner
+    	inner = self.readFromTokens(tokens)
+    	if self.isError(@inner) then return inner
       return ["quote", inner]
   	else if token == "`" then
-      inner = readFromTokens(tokens)
-      if isError(@inner) then return inner
+      inner = self.readFromTokens(tokens)
+      if self.isError(@inner) then return inner
       return ["quasiquote", inner]
   	else if token == "~@" then
-      inner = readFromTokens(tokens)
-      if isError(@inner) then return inner
+      inner = self.readFromTokens(tokens)
+      if self.isError(@inner) then return inner
       return ["splice-unquote", inner]
   	else if token == "~" then
-      inner = readFromTokens(tokens)
-      if isError(@inner) then return inner
+      inner = self.readFromTokens(tokens)
+      if self.isError(@inner) then return inner
       return ["unquote", inner]
     // TODO: Fix gensym because this is NOT working
     //else if token[token.len-1] == "#" then // Runtime gensym?
       //return ["gensym", token[0:token.len - 1]]
     // Return an atom, we can let the MiniScript type coercion do everything for us
     else 
-  	return atom(token)
+  	return self.atom(token)
   end if
 end function
 
-parse = function(code)
-    // print("parse function!")
-    tokens = tokenize(code)
-    result = readFromTokens(tokens)
-    if isError(@result) then return result
+// @Doc
+// This is the parser
+// It takes in code, tokenizes it, and returns te AST.
+// 
+clojette.parse = function(code)
+    tokens = self.tokenize(code)
+    result = self.readFromTokens(tokens)
+    if self.isError(@result) then return result
     if tokens.len > 0 then return lispError("Unexpected trailing tokens: " + tokens.join(" "))
     return result
 end function
 
-eval = function(exp, env)
+clojette.eval = function(exp, env)
 	if @exp isa number then return exp
 	if @exp == null then return null
 
@@ -312,9 +315,9 @@ eval = function(exp, env)
 		// Game interop
 		if first isa string and first[0] == "." then
     	methodName = first[1:]
-    	obj = eval(exp[1], env)
+    	obj = self.eval(exp[1], env)
     	if @obj == null then return lispError("null object in interop call ." + methodName)
-      if isError(@obj) then return addTrace(@obj, "in " + first) // Check for errors!    
+      if self.isError(@obj) then return addTrace(@obj, "in " + first) // Check for errors!    
 
     		fn = @obj[methodName]
 
@@ -323,8 +326,8 @@ eval = function(exp, env)
     		args = []
     		if exp.len > 2 then
         	for i in range(2, exp.len-1)
-          result = eval(exp[i], env)
-          if isError(@result) then return @result
+          result = self.eval(exp[i], env)
+          if self.isError(@result) then return @result
             args.push(@result)
         	end for
     		end if
@@ -343,8 +346,8 @@ eval = function(exp, env)
     		result = []
     		if exp.len > 1 then
         		for i in range(1, exp.len-1)
-            		val = eval(exp[i], env)
-            		if isError(@val) then return val
+            		val = self.eval(exp[i], env)
+            		if self.isError(@val) then return val
             		result.push(val)
         		end for
     		end if
@@ -356,7 +359,7 @@ eval = function(exp, env)
     	// strip quotes if present
     	if path[0] == """" then path = path[1:-1]
 
-    	//path = eval(exp[1], env)
+    	//path = self.eval(exp[1], env)
     	hostComputer = get_shell.host_computer
       fpath = get_abs_path(path)
     	f = hostComputer.File(fpath)
@@ -366,23 +369,23 @@ eval = function(exp, env)
     	contents = f.get_content
     	if contents == null then return lispError("Error: no read permission: " + path)
     	wrapped = "(do " + contents + ")"
-      result = parse(wrapped)
-      if isError(@result) then return result
-    	return eval(result, env)
+      result = self.parse(wrapped)
+      if self.isError(@result) then return result
+    	return self.eval(result, env)
 		end if
 	
 		if first == "set!" then
     	name = exp[1]
-    	value = eval(exp[2], env)
-			if isError(@value) then return value
+    	value = self.eval(exp[2], env)
+			if self.isError(@value) then return value
     		return env.setExisting(name, value)
 		end if
 
-		if globalEnv.locals["macros"].hasIndex(first) then
-    	macroFn = globalEnv.locals["macros"][first]  // no .get!
+		if self.globalEnv.locals["macros"].hasIndex(first) then
+    	macroFn = self.globalEnv.locals["macros"][first]  // no .get!
    		newExp = macroFn(exp[1:])
-			res = eval(newExp, env)
-			if isError(@res) then return res
+			res = self.eval(newExp, env)
+			if self.isError(@res) then return res
     		return res
 		end if
 
@@ -418,10 +421,10 @@ eval = function(exp, env)
             			end if
         			end for
     			end if
-    			return eval(__body, newEnv)
+    			return self.eval(__body, newEnv)
 			end function
     
-    		globalEnv.locals["macros"][name] = @macroFn
+    		self.globalEnv.locals["macros"][name] = @macroFn
     		return name
 		end if
 	
@@ -429,8 +432,8 @@ eval = function(exp, env)
     		args = []
     		if exp.len > 1 then
         		for i in range(1, exp.len-1)
-        			result = eval(exp[i], env)
-       				if isError(result) then return result
+        			result = self.eval(exp[i], env)
+       				if self.isError(result) then return result
         			args.push(result)
         		end for
     		end if
@@ -440,8 +443,8 @@ eval = function(exp, env)
 		// try/catch special form in eval
 		if first == "try" then
     		body = exp[1]
-    		result = eval(body, env)
-    		if isError(@result) then
+    		result = self.eval(body, env)
+    		if self.isError(@result) then
     		    if exp.len < 3 then return result
     		    catchClause = exp[2]
         		catchBindings = catchClause[1]
@@ -452,26 +455,26 @@ eval = function(exp, env)
         		if catchBindings.len > 0 then
         		    catchEnv.set(catchBindings[0], result["message"])
         		end if
-        		return eval(catchClause[2], catchEnv)
+        		return self.eval(catchClause[2], catchEnv)
     		end if
     		return result
 		end if
 
 		if first == "throw" then
-    		msg = eval(exp[1], env)
-    		if isError(msg) then return msg
+    		msg = self.eval(exp[1], env)
+    		if self.isError(msg) then return msg
     		return lispError(msg)
 		end if
 	
 		if first == "apply" then
-    		fn = eval(exp[1], env)
-    		argList = eval(exp[2], env)
-			  if isError(@fn) then return fn
-			  if isError(@argList) then return argList
+    		fn = self.eval(exp[1], env)
+    		argList = self.eval(exp[2], env)
+			  if self.isError(@fn) then return fn
+			  if self.isError(@argList) then return argList
     		if not @argList isa list then return lispError("Apply requires a list as second argument")
-    		isNative = globalEnv.natives.hasIndex(exp[1])
-        res = callFunction(@fn, @argList, @exp[1], isNative)
-        if isError(@res) then return addTrace(@res, "in " + first) 
+    		isNative = self.globalEnv.natives.hasIndex(exp[1])
+        res = self.callFunction(@fn, @argList, @exp[1], isNative)
+        if self.isError(@res) then return addTrace(@res, "in " + first) 
     		return res
 		end if
 	
@@ -479,8 +482,8 @@ eval = function(exp, env)
     		result = true
 			  if exp.len > 1 then
     			for i in range(1, exp.len-1)
-        		result = eval(exp[i], env)
-					if isError(@result) then return result
+        		result = self.eval(exp[i], env)
+					if self.isError(@result) then return result
 					if not result then return result
     			end for
 			  end if
@@ -490,8 +493,8 @@ eval = function(exp, env)
 		if first == "or" then
     		if exp.len == 1 then return null  // (or) with no args
     		for i in range(1, exp.len-1)
-        		result = eval(exp[i], env)
-				if isError(@result) then return result
+        		result = self.eval(exp[i], env)
+				if self.isError(@result) then return result
         		if result then return result  // short circuit, return truthy value
     		end for
     		return false
@@ -510,32 +513,32 @@ eval = function(exp, env)
     		newEnv = makeEnv(env)
     		if bindings.len > 0 then
         		for i in range(0, bindings.len-1, 2)
-            		value = eval(bindings[i+1], newEnv)
-            		if isError(@value) then return value
+            		value = self.eval(bindings[i+1], newEnv)
+            		if self.isError(@value) then return value
             		newEnv.set(bindings[i], value)
         		end for
     		end if
-    		return eval(body, newEnv)
+    		return self.eval(body, newEnv)
 		end if
 	
 		if first == "do" then
     		result = null
     		if exp.len > 1 then
         		for i in range(1, exp.len-1)
-            		result = eval(exp[i], env)
-					if isError(@result) then return result
+            		result = self.eval(exp[i], env)
+					if self.isError(@result) then return result
         		end for
     		end if
     		return result
 		end if
 	
       if first == "if" then
-        cond = eval(exp[1], env)
-			  if isError(@cond) then return cond
+        cond = self.eval(exp[1], env)
+			  if self.isError(@cond) then return cond
         if @cond then
-          return eval(exp[2], env)
+          return self.eval(exp[2], env)
 			  else
-    		  if exp.len > 3 then return eval(exp[3], env)
+    		  if exp.len > 3 then return self.eval(exp[3], env)
     			return null
 			  end if
       end if
@@ -543,21 +546,21 @@ eval = function(exp, env)
 		if first == "ns" then
 			nsName = exp[1]
     	if nsName isa list then nsName = exp[1][1]  // handle quoted ns names
-   		namespaces = globalEnv.locals["__namespaces__"]
+   		namespaces = self.globalEnv.locals["__namespaces__"]
     	if not namespaces.hasIndex(nsName) then
         namespaces[nsName] = {}
-        globalEnv.locals["__ns_aliases__"][nsName] = {}
+        self.globalEnv.locals["__ns_aliases__"][nsName] = {}
     	end if
-    	globalEnv.locals["__current_ns__"] = nsName
+    	self.globalEnv.locals["__current_ns__"] = nsName
     	return nsName
 		end if
 
 		if first == "def" or first == "define" then
     	name = exp[1]
-    	value = eval(exp[2], env)
-    	if isError(@value) then return value
-			currentNs = globalEnv.locals["__current_ns__"]
-			globalEnv.locals["__namespaces__"][currentNs][name] = @value
+    	value = self.eval(exp[2], env)
+    	if self.isError(@value) then return value
+			currentNs = self.globalEnv.locals["__current_ns__"]
+			self.globalEnv.locals["__namespaces__"][currentNs][name] = @value
     	env.set(name, value)
     	return value
 		end if
@@ -572,8 +575,8 @@ eval = function(exp, env)
 
     // Handle syntax for (:x map), basically looks up stuff from maps using keywords.
     // Very Clojure-esque.
-    if first[0] == ":" @exp[1] isa map then
-      if isError(@exp[1]) then return @exp[1] // Check if 2nd element is an error, and return early... Is this more efficient? No clue.
+    if first[0] == ":" and @exp[1] isa map then
+      if self.isError(@exp[1]) then return @exp[1] // Check if 2nd element is an error, and return early... Is this more efficient? No clue.
       if exp[1].hasIndex(first) then return exp[1][first] 
       // Map doesnt have index for :x, so we perform a lookup for x
       if exp[1].hasIndex(first[1:]) then return exp[1][first[1:]]
@@ -581,19 +584,19 @@ eval = function(exp, env)
     end if
         
 		// normal function call
-		op = eval(first, env)
-		if isError(@op) then return op
+		op = self.eval(first, env)
+		if self.isError(@op) then return op
 		args = []
 		if exp.len > 1 then
     	for i in range(1, exp.len-1)
-      	val = eval(exp[i], env)
-			  if isError(@val) then return val
+      	val = self.eval(exp[i], env)
+			  if self.isError(@val) then return val
         args.push(@val)
     	end for
 		end if
-		isNative = globalEnv.natives.hasIndex(first)
-    res = callFunction(@op, @args, @first, isNative)
-    if isError(@res) then return addTrace(@res, " in " + first)
+		isNative = self.globalEnv.natives.hasIndex(first)
+    res = self.callFunction(@op, @args, @first, isNative)
+    if self.isError(@res) then return addTrace(@res, " in " + first)
 		return res
 	  
     else if @exp isa string then
@@ -606,14 +609,14 @@ eval = function(exp, env)
     	if parts.len == 2 and parts[0] != "" and parts[1] != "" then
       	alias = parts[0]
       	sym = parts[1]
-      	currentNs = globalEnv.locals["__current_ns__"]
-      	aliases = globalEnv.locals["__ns_aliases__"][currentNs]
+      	currentNs = self.globalEnv.locals["__current_ns__"]
+      	aliases = self.globalEnv.locals["__ns_aliases__"][currentNs]
       	if aliases.hasIndex(alias) then
           fullNs = aliases[alias]
       	else
         	fullNs = alias
       	end if
-      	namespaces = globalEnv.locals["__namespaces__"]
+      	namespaces = self.globalEnv.locals["__namespaces__"]
       	if not namespaces.hasIndex(fullNs) then return lispError("No such namespace: " + fullNs)
       	if not namespaces[fullNs].hasIndex(sym) then return lispError("No such var: " + exp)
       	return @namespaces[fullNs][sym]

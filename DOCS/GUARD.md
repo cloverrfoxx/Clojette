@@ -16,7 +16,7 @@ Returns:
 
 ## Signature
 
-```miniscript"
+```javascript"
 guard(arity, types, args)
 ```
 
@@ -44,13 +44,13 @@ guard(arity, types, args)
 
 Types are checked positionally.
 
-```miniscript id="29fjxf"
+```javascript"
 ["string", "number"]
 ```
 
 means:
 
-```text id="2b8qef"
+```javascript
 arg0 = string
 arg1 = number
 ```
@@ -64,25 +64,25 @@ the final type repeats.
 
 Example:
 
-```miniscript id="t8czvq"
+```javascript
 guard("1+", ["number"], args)
 ```
 
 means:
 
-```text id="szgh5r"
+```text 
 (number number number ...)
 ```
 
 Example:
 
-```miniscript id="31k6q8"
+```javascript
 guard("2+", ["string", "number"], args)
 ```
 
 means:
 
-```text id="lk5tm4"
+```text
 (string number number number ...)
 ```
 
@@ -92,19 +92,19 @@ means:
 
 Nested lists represent unions.
 
-```miniscript id="e0o5bl"
+```javascript
 [["string", "number"]]
 ```
 
 means:
 
-```text id="dh6vlu"
+```text
 string OR number
 ```
 
 Example:
 
-```miniscript id="i4x2mn"
+```javascript
 guard("1+", [["string", "number"]], args)
 ```
 
@@ -125,7 +125,7 @@ Rejects:
 
 ## Fixed Arity
 
-```miniscript id="s8mz9f"
+```javascript id="s8mz9f"
 err = guard("2", ["number"], args)
 if isError(err) then return err
 ```
@@ -136,7 +136,7 @@ Requires exactly 2 numbers.
 
 ## Variadic
 
-```miniscript id="iik8vb"
+```javascript
 err = guard("1+", ["string"], args)
 if isError(err) then return err
 ```
@@ -147,7 +147,7 @@ Requires 1 or more strings.
 
 ## Mixed Types
 
-```miniscript id="ow7m5u"
+```javascript
 err = guard(
     "2+",
     ["string", "number"],
@@ -165,7 +165,7 @@ Requires:
 
 ## Union Types
 
-```miniscript id="5xx7j2"
+```javascript
 err = guard(
     "1+",
     [["string", "list", "number"]],
@@ -200,7 +200,7 @@ Additional custom types may be added through `realTypeof`.
 
 # Typical Usage Pattern
 
-```miniscript id="w1h1j8"
+```javascript
 myFunction = function(args)
 
     err = guard("2", ["number"], args)

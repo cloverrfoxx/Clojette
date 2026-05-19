@@ -20,15 +20,13 @@
 // Import the runtime
 import_code("<path-to-runtime>")
 
-tests = false
-
 // boot the stdlib
 // DONE: move to a set place in the filesystem.
 stdlib = "(do (import /lib/clojette/macros.clj) (import /lib/clojette/stdlib.clj))"
 tests = "(import /lib/clojette/tests.clj)"
-eval(parse(stdlib), globalEnv)
-if tests == true then 
-	eval(parse(tests), globalEnv)
+clojette.eval(parse(stdlib), globalEnv)
+if clojette.tests == true then 
+	clojette.eval(parse(tests), globalEnv)
 end if
 
-repl()
+clojette.repl()
