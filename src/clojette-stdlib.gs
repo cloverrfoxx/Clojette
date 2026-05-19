@@ -95,6 +95,7 @@ clojette.matchesType = function(expected, actual)
         return true
     end if
 
+    if expected == "all" then return true
     return expected == actual
 end function
 
@@ -242,7 +243,7 @@ end function
 
 // Comparison
 clojette.globalEnv.locals["="] = function(args)
-    err = clojette.guard("2+", ["any"], args)
+    err = clojette.guard("2+", ["all"], args)
     if clojette.isError(err) then return err
 
     for i in range(1, args.len-1)
@@ -252,13 +253,13 @@ clojette.globalEnv.locals["="] = function(args)
 end function
 
 clojette.globalEnv.locals["not="] = function(args)
-    err = clojette.guard("2", ["any"], args)
+    err = clojette.guard("2", ["all"], args)
     if clojette.isError(err) then return err
     return args[0] != args[1]
 end function
 
 clojette.globalEnv.locals["<"] = function(args)
-    err = clojette.guard("2+", ["any"], args)
+    err = clojette.guard("2+", ["all"], args)
     if clojette.isError(err) then return err
     for i in range(1, args.len-1)
         if args[i-1] >= args[i] then return false
@@ -267,7 +268,7 @@ clojette.globalEnv.locals["<"] = function(args)
 end function
 
 clojette.globalEnv.locals[">"] = function(args)
-    err = clojette.guard("2+", ["any"], args)
+    err = clojette.guard("2+", ["all"], args)
     if clojette.isError(err) then return err
     for i in range(1, args.len-1)
         if args[i-1] <= args[i] then return false
@@ -276,7 +277,7 @@ clojette.globalEnv.locals[">"] = function(args)
 end function
 
 clojette.globalEnv.locals["<="] = function(args)
-    err = clojette.guard("2+", ["any"], args)
+    err = clojette.guard("2+", ["all"], args)
     if clojette.isError(err) then return err
     for i in range(1, args.len-1)
         if args[i-1] > args[i] then return false
@@ -285,7 +286,7 @@ clojette.globalEnv.locals["<="] = function(args)
 end function
 
 clojette.globalEnv.locals[">="] = function(args)
-    err = clojette.guard("2+", ["any"], args)
+    err = clojette.guard("2+", ["all"], args)
     if clojette.isError(err) then return err
     for i in range(1, args.len-1)
         if args[i-1] < args[i] then return false
@@ -294,7 +295,7 @@ clojette.globalEnv.locals[">="] = function(args)
 end function
 
 clojette.globalEnv.locals["not"] = function(args)
-    err = clojette.guard("1", ["any"], args)
+    err = clojette.guard("1", ["all"], args)
     if clojette.isError(err) then return err
     if args.len != 1 then return self.lispError("not requires exactly 1 argument")
     return not args[0]

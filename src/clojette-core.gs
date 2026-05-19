@@ -21,7 +21,7 @@
 clojette.atom = function(token)
 	// We dereference the token to not invoke anything by accident
   if @token isa number then return token
-	if @token isa funcRef then return lispError("Tried evaluating funcRef as an atom?")
+	if @token isa funcRef then return self.lispError("Tried evaluating funcRef as an atom?")
 	// Return full string literal
 	if token[0] == """" then return token
     num = token.val
@@ -62,7 +62,7 @@ clojette.callFunction = function(op, args, name, isNative=false)
     if @op isa map then
         if op.hasIndex("classID") and op["classID"] == "fn" then
             while true
-                newEnv = bindArgs(op["args"], args, op["env"])
+                newEnv = self.bindArgs(op["args"], args, op["env"])
                 if self.isError(@newEnv) then return newEnv
                 result = null
                 for bodyExpr in op["body"]
@@ -88,13 +88,13 @@ clojette.callFunction = function(op, args, name, isNative=false)
             if args.len == 3 then return @op(args[0], args[1], args[2])
             if args.len == 4 then return @op(args[0], args[1], args[2], args[3])
             if args.len == 5 then return @op(args[0], args[1], args[2], args[3], args[4])
-            return lispError("Native functions support at most 5 arguments")
+            return self.lispError("Native functions support at most 5 arguments")
         else
             return op(@args)
         end if
     end if
     
-    return lispError("Not a function: " + name)
+    return self.lispError("Not a function: " + name)
 end function
 
 clojette.evalQuasiquote = function(exp, env)
@@ -117,7 +117,7 @@ clojette.evalQuasiquote = function(exp, env)
         if item isa list and item.len > 0 and item[0] == "splice-unquote" then
           spliced = self.eval(item[1], env)
           if self.isError(@spliced) then return spliced
-          if not @spliced isa list then return lispError("splice-unquote requires a list, got: " + typeof(@spliced))
+          if not @spliced isa list then return self.lispError("splice-unquote requires a list, got: " + typeof(@spliced))
             if spliced.len > 0 then
               for j in range(0, spliced.len-1)
                 result.push(spliced[j])
@@ -135,7 +135,7 @@ end function
 // Convert a string of characters into a list of tokens
 clojette.tokenize = function(chars)
     tokens = []
-    //if tokens.len == 0 then return lispError("Unexpected EOF")
+    //if tokens.len == 0 then return self.lispError("Unexpected EOF")
     //if self.isError(tokens[0]) then return tokens.pull  // propagate tokenizer errors
     i = 0
     while i < chars.len
@@ -154,7 +154,7 @@ clojette.tokenize = function(chars)
         	i = i + 1
     		end while
     		if i >= chars.len then
-        	tokens.push(lispError("Unterminated string literal: " + tok))
+        	tokens.push(self.lispError("Unterminated string literal: " + tok))
         	return tokens
     		end if
     		tok = tok + """"
@@ -199,9 +199,9 @@ end function
 //
 clojette.readFromTokens = function(tokens)
     // We don't want an empty list
-    if tokens.len == 0 then return lispError("Unexpected EOF")
+    if tokens.len == 0 then return self.lispError("Unexpected EOF")
     // We also dont want anything that is NOT a list
-    if not @tokens isa list then return lispError("Not a list")
+    if not @tokens isa list then return self.lispError("Not a list")
     token = tokens.pull
     
     // We encountered a symbol, parse it recursively
@@ -212,7 +212,7 @@ clojette.readFromTokens = function(tokens)
         if self.isError(@item) then return item
         L.push(item)
     	end while
-    	if tokens.len == 0 then return lispError("Unexpected EOF while reading list")
+    	if tokens.len == 0 then return self.lispError("Unexpected EOF while reading list")
     	tokens.pull  // consume the )
     	return L
 
@@ -224,7 +224,7 @@ clojette.readFromTokens = function(tokens)
           if self.isError(@item) then return item
           L.push(item)
       end while
-      if tokens.len == 0 then return lispError("Unexpected EOF while reading vector")
+      if tokens.len == 0 then return self.lispError("Unexpected EOF while reading vector")
       tokens.pull  // consume the ]
       return ["array"] + L
 
@@ -236,16 +236,16 @@ clojette.readFromTokens = function(tokens)
           if self.isError(@item) then return item
           L.push(item)
       end while
-      if tokens.len == 0 then return lispError("Unexpected EOF while reading map")
+      if tokens.len == 0 then return self.lispError("Unexpected EOF while reading map")
       tokens.pull  // consume the }
       return ["hash-map"] + L
       
       else if token == ")" then
-  		return lispError("Unexpected )")
+  		return self.lispError("Unexpected )")
       else if token == "]" then
-        return lispError("Unexpected ]")
+        return self.lispError("Unexpected ]")
       else if token == "}" then
-        return lispError("Unexpected }")
+        return self.lispError("Unexpected }")
 
     // Handle syntax sugar for anonymous functions...
     else if token == "#" then
@@ -253,7 +253,7 @@ clojette.readFromTokens = function(tokens)
         tokens.pull // consume (
         expr = self.readFromTokens(tokens)
         if @isError(@expr) then return expr
-        if tokens[0] != ")" then return lispError("Expected ) after #(...)")
+        if tokens[0] != ")" then return self.lispError("Expected ) after #(...)")
         tokens.pull  // consume )
         return ["fn", expr] // Return anonymous function.
       end if
@@ -294,7 +294,7 @@ clojette.parse = function(code)
     tokens = self.tokenize(code)
     result = self.readFromTokens(tokens)
     if self.isError(@result) then return result
-    if tokens.len > 0 then return lispError("Unexpected trailing tokens: " + tokens.join(" "))
+    if tokens.len > 0 then return self.lispError("Unexpected trailing tokens: " + tokens.join(" "))
     return result
 end function
 
@@ -309,15 +309,15 @@ clojette.eval = function(exp, env)
 
     // handle special forms first
 		if first == "quasiquote" then
-    	return evalQuasiquote(exp[1], env)
+    	return self.evalQuasiquote(exp[1], env)
 		end if
 
 		// Game interop
 		if first isa string and first[0] == "." then
     	methodName = first[1:]
     	obj = self.eval(exp[1], env)
-    	if @obj == null then return lispError("null object in interop call ." + methodName)
-      if self.isError(@obj) then return addTrace(@obj, "in " + first) // Check for errors!    
+    	if @obj == null then return self.lispError("null object in interop call ." + methodName)
+      if self.isError(@obj) then return self.addTrace(@obj, "in " + first) // Check for errors!    
 
     		fn = @obj[methodName]
 
@@ -339,7 +339,7 @@ clojette.eval = function(exp, env)
     		if args.len == 3 then return fn(@obj, args[0], args[1], args[2])
     		if args.len == 4 then return fn(@obj, args[0], args[1], args[2], args[3])
     		if args.len == 5 then return fn(@obj, args[0], args[1], args[2], args[3], args[4])
-    		return lispError("Too many arguments for native method")
+    		return self.lispError("Too many arguments for native method")
     end if
 
     if first == "array" then
@@ -364,10 +364,10 @@ clojette.eval = function(exp, env)
       fpath = get_abs_path(path)
     	f = hostComputer.File(fpath)
     	
-      if f == null then return lispError("Error: file not found: " + path)
-    	if f.is_binary then return lispError("Error: cannot import binary file: " + path)
+      if f == null then return self.lispError("Error: file not found: " + path)
+    	if f.is_binary then return self.lispError("Error: cannot import binary file: " + path)
     	contents = f.get_content
-    	if contents == null then return lispError("Error: no read permission: " + path)
+    	if contents == null then return self.lispError("Error: no read permission: " + path)
     	wrapped = "(do " + contents + ")"
       result = self.parse(wrapped)
       if self.isError(@result) then return result
@@ -402,7 +402,7 @@ clojette.eval = function(exp, env)
     			__argNames = argNames  // capture locally
     			__body = body          // capture locally
     			__closedEnv = closedEnv
-    			newEnv = makeEnv(__closedEnv)
+    			newEnv = self.makeEnv(__closedEnv)
     			if __argNames.len > 0 and forms.len > 0 then
         			for i in range(0, __argNames.len-1)
             			if __argNames[i] == "&" then
@@ -451,7 +451,7 @@ clojette.eval = function(exp, env)
         		if catchBindings isa list and catchBindings.len > 0 and catchBindings[0] == "array" then
         		    catchBindings = catchBindings[1:]
         		end if
-        		catchEnv = makeEnv(env)
+        		catchEnv = self.makeEnv(env)
         		if catchBindings.len > 0 then
         		    catchEnv.set(catchBindings[0], result["message"])
         		end if
@@ -463,7 +463,7 @@ clojette.eval = function(exp, env)
 		if first == "throw" then
     		msg = self.eval(exp[1], env)
     		if self.isError(msg) then return msg
-    		return lispError(msg)
+    		return self.lispError(msg)
 		end if
 	
 		if first == "apply" then
@@ -471,10 +471,10 @@ clojette.eval = function(exp, env)
     		argList = self.eval(exp[2], env)
 			  if self.isError(@fn) then return fn
 			  if self.isError(@argList) then return argList
-    		if not @argList isa list then return lispError("Apply requires a list as second argument")
+    		if not @argList isa list then return self.lispError("Apply requires a list as second argument")
     		isNative = self.globalEnv.natives.hasIndex(exp[1])
         res = self.callFunction(@fn, @argList, @exp[1], isNative)
-        if self.isError(@res) then return addTrace(@res, "in " + first) 
+        if self.isError(@res) then return self.addTrace(@res, "in " + first) 
     		return res
 		end if
 	
@@ -510,7 +510,7 @@ clojette.eval = function(exp, env)
         		bindings = bindings[1:]
     		end if
     		body = exp[2]
-    		newEnv = makeEnv(env)
+    		newEnv = self.makeEnv(env)
     		if bindings.len > 0 then
         		for i in range(0, bindings.len-1, 2)
             		value = self.eval(bindings[i+1], newEnv)
@@ -580,7 +580,7 @@ clojette.eval = function(exp, env)
       if exp[1].hasIndex(first) then return exp[1][first] 
       // Map doesnt have index for :x, so we perform a lookup for x
       if exp[1].hasIndex(first[1:]) then return exp[1][first[1:]]
-      return lispError("Key " + first + " not found from map " + @exp[1])
+      return self.lispError("Key " + first + " not found from map " + @exp[1])
     end if
         
 		// normal function call
@@ -596,7 +596,7 @@ clojette.eval = function(exp, env)
 		end if
 		isNative = self.globalEnv.natives.hasIndex(first)
     res = self.callFunction(@op, @args, @first, isNative)
-    if self.isError(@res) then return addTrace(@res, " in " + first)
+    if self.isError(@res) then return self.addTrace(@res, " in " + first)
 		return res
 	  
     else if @exp isa string then
@@ -617,8 +617,8 @@ clojette.eval = function(exp, env)
         	fullNs = alias
       	end if
       	namespaces = self.globalEnv.locals["__namespaces__"]
-      	if not namespaces.hasIndex(fullNs) then return lispError("No such namespace: " + fullNs)
-      	if not namespaces[fullNs].hasIndex(sym) then return lispError("No such var: " + exp)
+      	if not namespaces.hasIndex(fullNs) then return self.lispError("No such namespace: " + fullNs)
+      	if not namespaces[fullNs].hasIndex(sym) then return self.lispError("No such var: " + exp)
       	return @namespaces[fullNs][sym]
       end if
     end if

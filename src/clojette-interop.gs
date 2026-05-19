@@ -44,6 +44,12 @@ clojette.nativeFns = {
     "typeof": @typeof,
     "globals": @globals,
     "format-columns": @format_columns,
+    "md5": @md5,
+    "get-custom-object": @get_custom_object,
+    "cob": @get_custom_object,
+    "cd": @cd,
+    "hash": @hash,
+    "poll-input": @poll_input,
 }
 
 for kv in clojette.nativeFns

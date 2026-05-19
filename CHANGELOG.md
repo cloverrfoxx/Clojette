@@ -11,6 +11,7 @@ WIP, not a full release, but I am throwing changes here as they come.
 - Guard() functionality. Guard() checks the arguments you give in stdlib. This should improve stability. It is also usable from the language, too!
 - refactored Clojette to be its own namespace, so that it doesn't pollute the globals.
 - made a discord! go join it! 
+- added multiple native functions to the natives list, including get-custom-object and poll-input.
 - TODO: Add other changes that get made!
 
 ## Bugfixes

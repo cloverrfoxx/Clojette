@@ -23,12 +23,12 @@
 // Clojette is now a class because we don't want to pollute the globals
 clojette = {}
 
-clojette.__runtimeTag__ = function
+__runtimeTag__ = function
 end function
 
 clojette.lispError = function(msg)
-  if msg == null then return {"classID": "error", "__tag__": self.@__runtimeTag__, "message": "Null"}
-  return {"classID": "error", "__tag__": self.@__runtimeTag__, "message": msg}
+  if msg == null then return {"classID": "error", "__tag__": @__runtimeTag__, "message": "Null"}
+  return {"classID": "error", "__tag__": @__runtimeTag__, "message": msg}
 end function
 
 import_code("/home/<user>/clojette-dev/clojette-env.src")     // sets up globalEnv + natives = {}
@@ -43,6 +43,7 @@ clojette.repl = function(prompt="Clojette> ")
   while true
       input = user_input(prompt)
       if input == "exit" or input == "quit" or input == "q" then break
+      input = "(do " + input + ")"
       result = self.eval(self.parse(input), self.globalEnv)
       if self.isError(@result) then
         print("ERROR: " + result["message"])

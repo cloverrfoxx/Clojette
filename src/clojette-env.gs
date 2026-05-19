@@ -24,7 +24,7 @@ clojette.makeEnv = function(outerEnv)
     e.get = function(name)
       if self.locals.hasIndex(name) then return @self.locals[name]
       if outerEnv != null then return outerEnv.get(name)
-      return lispError("Undefined in the env: " + name)
+      return clojette.lispError("Undefined in the env: " + name)
     end function
     e.set = function(name, value)
         self.locals[name] = @value
@@ -35,7 +35,7 @@ clojette.makeEnv = function(outerEnv)
         return @value
       end if
       if outerEnv != null then return outerEnv.setExisting(name, @value)
-      return lispError("Cannot set! undefined variable: " + name)
+      return clojette.lispError("Cannot set! undefined variable: " + name)
 	  end function
     return e
 end function
@@ -46,7 +46,7 @@ clojette.bindArgs = function(argNames, params, baseEnv)
     // No args expected
     if argNames.len == 0 then
       if params.len > 0 then
-        return lispError("Wrong number of args: expected 0, got " + params.len)
+        return self.lispError("Wrong number of args: expected 0, got " + params.len)
       end if
       return newEnv
     end if
@@ -63,7 +63,7 @@ clojette.bindArgs = function(argNames, params, baseEnv)
     if restIdx != null then
         // Variadic: minimum arity is everything before the &
         if params.len < restIdx then
-            return lispError("Wrong number of args: expected at least " + restIdx + ", got " + params.len)
+            return self.lispError("Wrong number of args: expected at least " + restIdx + ", got " + params.len)
         end if
         for i in range(0, restIdx-1)
             newEnv.set(argNames[i], params[i])
@@ -78,7 +78,7 @@ clojette.bindArgs = function(argNames, params, baseEnv)
     else
         // Exact arity required
         if params.len != argNames.len then
-            return lispError("Wrong number of args: expected " + argNames.len + ", got " + params.len)
+            return self.lispError("Wrong number of args: expected " + argNames.len + ", got " + params.len)
         end if
         for i in range(0, argNames.len-1)
             newEnv.set(argNames[i], params[i])
