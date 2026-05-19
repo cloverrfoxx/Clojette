@@ -25,8 +25,7 @@ There are currently a few features that are needed.
 2. Persistent vectors. I am quite sure that other peristent data structures could be useful too.
 3. `#{}`, `@` deref. Other reader macros too if someone wants...
 4. Expose `eval()` to the user. (Sidenote: this is exposed in the Clojette library... eval() isnt a special form though)
-5. Stronger protections in the stdlib, possibly through a `guard` function. Maybe takes in `type`, `amount`, `@args`?
-6. Fix any crashes, the Clojette runtime shouldn't crash, instead it should error out gracefully
+5. Fix any crashes, the Clojette runtime shouldn't crash, instead it should error out gracefully
 
 # Contributing
 Pull requests are welcome. To get to know the ins and outs of contributing, check out `CONTRIBUTING.md`. Also make sure to run the tests before making a pull requests. All tests should pass, and if they do not pass, any PR will not be accepted. To make sure regressions do not happen, the test suite MUST pass before a PR is accepted.

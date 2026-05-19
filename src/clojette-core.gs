@@ -334,6 +334,7 @@ eval = function(exp, env)
     		if args.len == 2 then return fn(@obj, args[0], args[1])
     		if args.len == 3 then return fn(@obj, args[0], args[1], args[2])
     		if args.len == 4 then return fn(@obj, args[0], args[1], args[2], args[3])
+    		if args.len == 5 then return fn(@obj, args[0], args[1], args[2], args[3], args[4])
     		return lispError("Too many arguments for native method")
     end if
 

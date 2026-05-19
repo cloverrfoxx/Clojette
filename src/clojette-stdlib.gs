@@ -130,6 +130,22 @@ globalEnv.locals["gensym"] = function(args)
     return prefix + __gensym_counter__
 end function
 
+// Guard!
+globalEnv.locals["guard"] = function(args)
+    err = guard("3-5", ["string", "list", "list", "string"], args, "guard")
+    if isError(err) then return err
+
+    types = args[0]
+    values = args[1]
+    arguments = args[2]
+    name = null
+    msg = null
+    if args.len >= 3 then name = args[3] 
+    if args.len >= 4 then msg = args[4] 
+
+    return guard(types, values, arguments, name, msg)
+end function
+
 // Arithmetic
 globalEnv.locals["+"] = function(args)
     err = guard("*", [["number", "string", "list", "map"]], args, "+")

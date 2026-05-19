@@ -18,7 +18,7 @@
 ;;   along with Clojette. If not, see <https://www.gnu.org/licenses/>.
 
 ;; Core standard library macros. These are important.
-;; TODO: Add gensym in the macro expansion step
+;; DONE: Add gensym in the macro expansion step
 (defmacro defn [n# p# & b#]
   `(def ~n# (fn ~p# (do ~@b#))))
 
