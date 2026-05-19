@@ -89,6 +89,12 @@ matchesType = function(expected, actual)
         return false
     end if
 
+    if expected == "any" then
+        if actual == "null" then return false
+        if actual == "function" then return false
+        return true
+    end if
+
     return expected == actual
 end function
 
@@ -110,7 +116,7 @@ guard = function(arity, types, args, argname = null, message=null)
         end if
 
         if not matchesType(expected, actual) then
-            if message == null then return lispError(message)
+            if message != null then return lispError(message)
             if argname != null then return lispError(argname + ": expected " + str(expected) + ", got " + actual)
             return lispError("expected " + str(expected) + ", got " + actual)
         end if
