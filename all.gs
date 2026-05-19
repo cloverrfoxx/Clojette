@@ -17,1037 +17,1494 @@
 //   You should have received a copy of the GNU General Public License
 //   along with Clojette. If not, see <https://www.gnu.org/licenses/>.
 
-// This file has been minified using (Greybel)[https://github.com/ayecue/greybel-js].
-// The code is available in full at https://github.com/lattiahirvio/Clojette
-// This file is meant for distribution, and not development.
-// To change the code, download the files from GitHub, and work on those.
+// This is the runtime
+// Import this to embed it into your program
 
-globals.I=globals
-I.Ч=null
-I.Т="classID"
-I.У="error"
-I.Ф="__tag__"
-I.Э="message"
-I.Ц=""""
-I.Х="trace"
-I.Я="fn"
-I.Ь="args"
-I.Ю="in "
-I.Ы="recur"
-I.Ш=")"
-I.Щ="array"
-I.и="quote"
-I.й="set!"
-I.Ъ="macros"
-I.н="apply"
-I.з="let"
-I.д="do"
-I.е="if"
-I.б="__namespaces__"
-I.в="__ns_aliases__"
-I.а="__current_ns__"
-I.ж="def"
-I.м=""
-I.к="__gensym_counter__"
-I.г="user"
-I.л="Division by zero"
-J=function
+// Clojette is now a class because we don't want to pollute the globals
+clojette = {}
+
+__runtimeTag__ = function
 end function
-K=function(h)
-if h==Ч then return {Т:У,Ф:@J,Э:"Null"}
-return {Т:У,Ф:@J,Э:h}
+
+clojette.lispError = function(msg)
+  if msg == null then return {"classID": "error", "__tag__": @__runtimeTag__, "message": "Null"}
+  return {"classID": "error", "__tag__": @__runtimeTag__, "message": msg}
 end function
-ϫ=function(t)
-if @t isa number then return t
-if @t isa funcRef then return K("Tried evaluating funcRef as an atom?")
-if t[0]==Ц then return t
-x=t.val
-if str(x)==t then return x
-return t
+
+// Environment setup, very cool.
+clojette.makeEnv = function(outerEnv)
+    e = {}
+    e.locals = {}
+    e.get = function(name)
+      if self.locals.hasIndex(name) then return @self.locals[name]
+      if outerEnv != null then return outerEnv.get(name)
+      return clojette.lispError("Undefined in the env: " + name)
+    end function
+    e.set = function(name, value)
+        self.locals[name] = @value
+    end function
+    e.setExisting = function(name, value)
+      if self.locals.hasIndex(name) then
+        self.locals[name] = value
+        return @value
+      end if
+      if outerEnv != null then return outerEnv.setExisting(name, @value)
+      return clojette.lispError("Cannot set! undefined variable: " + name)
+	  end function
+    return e
 end function
-M=function(val)
-if not @val isa map then return 0
-if @val.hasIndex(Т) and @val[Т]==У then
-if not @val.hasIndex(Ф) then return 0
-return @val[Ф]==@J
-end if
-return 0
+
+clojette.bindArgs = function(argNames, params, baseEnv)
+    newEnv = self.makeEnv(baseEnv)
+    
+    // No args expected
+    if argNames.len == 0 then
+      if params.len > 0 then
+        return self.lispError("Wrong number of args: expected 0, got " + params.len)
+      end if
+      return newEnv
+    end if
+    
+    // Find & position if present
+    restIdx = null
+    for i in range(0, argNames.len-1)
+      if argNames[i] == "&" then
+        restIdx = i
+        break
+      end if
+    end for
+    
+    if restIdx != null then
+        // Variadic: minimum arity is everything before the &
+        if params.len < restIdx then
+            return self.lispError("Wrong number of args: expected at least " + restIdx + ", got " + params.len)
+        end if
+        for i in range(0, restIdx-1)
+            newEnv.set(argNames[i], params[i])
+        end for
+        restName = argNames[restIdx+1]
+        // Gracefully bind empty list if no rest args provided
+        if restIdx >= params.len then
+            newEnv.set(restName, [])
+        else
+            newEnv.set(restName, params[restIdx:])
+        end if
+    else
+        // Exact arity required
+        if params.len != argNames.len then
+            return self.lispError("Wrong number of args: expected " + argNames.len + ", got " + params.len)
+        end if
+        for i in range(0, argNames.len-1)
+            newEnv.set(argNames[i], params[i])
+        end for
+    end if
+    
+    return newEnv
 end function
-N=function(k,g)
-if not k.hasIndex(Х) then k[Х]=[]
-k[Х].push(g)
-return k
+
+//clojette.Env = {}
+clojette.globalEnv = clojette.makeEnv(null)
+// In the MiniScript bootstrap, before the REPL
+clojette.globalEnv.locals["__recur_sentinel__"] = {"classID": "recur", "args": null}
+clojette.globalEnv.locals["__gensym_counter__"] = 0
+clojette.globalEnv.locals["macros"] = {}
+clojette.globalEnv.locals["__namespaces__"] = {"user": {}}
+clojette.globalEnv.locals["__current_ns__"] = "user"
+clojette.globalEnv.locals["__ns_aliases__"] = {"user": {}}
+clojette.globalEnv.natives = {}
+
+// sentinels for the env, lets us use special forms from macros.
+// Yes this is a non-ideal, but what can you do? 
+// TODO: fix
+clojette.globalEnv.locals["do"] = "do"
+clojette.globalEnv.locals["if"] = "if"
+clojette.globalEnv.locals["def"] = "def"
+clojette.globalEnv.locals["fn"] = "fn"
+clojette.globalEnv.locals["let"] = "let"
+clojette.globalEnv.locals["quote"] = "quote"
+clojette.globalEnv.locals["set!"] = "set!"
+
+// Guards
+clojette.realTypeof = function(anyObject)
+
+    if @anyObject == null then return "null"
+
+    // Custom fn object type
+    if @anyObject isa map then
+        if @anyObject.hasIndex("classID") and @anyObject["classID"] == "fn" then
+            return "function"
+        end if
+    end if
+
+    objectType = @anyObject * 0
+
+    if objectType == "" then return "string"
+    if objectType == [] then return "list"
+    if @anyObject == {} then return "map"
+
+    for i in @anyObject
+        return "map"
+    end for
+
+    if objectType == null then return "function"
+
+    return "number"
 end function
-O=function(val)
-if not @val isa map then return 0
-if not val.hasIndex(Ф) then return 0
-return @val[Ф]==@J
+
+clojette.checkArity = function(sig, argc)
+
+    if sig == "*" then return true
+
+    if sig[sig.len-1] == "+" then
+        min = val(sig[:-1])
+        return argc >= min
+    end if
+
+    dash = sig.indexOf("-")
+
+    if dash != null then
+        min = val(sig[:dash])
+        max = val(sig[dash+1:])
+        return argc >= min and argc <= max
+    end if
+
+    return argc == val(sig)
 end function
-P=function(l,m,name,Н=0)
-if M(@l) then return @l
-if @l isa map then
-if l.hasIndex(Т) and l[Т]==Я then
-while 1
-o=W(l[Ь],m,l["env"])
-if M(@o) then return o
-ϴ=Ч
-for p in l["body"]
-ϴ=U(p,o)
-if M(@ϴ) then return N(@ϴ,Ю+name)
+
+clojette.matchesType = function(expected, actual)
+    if expected isa list then
+        for t in expected
+            if t == "all" then return true
+            if t == "any" then
+              if actual == "null" then return false
+              if actual == "function" then return false
+              return true
+            end if
+            if t == actual then return true
+        end for
+        return false
+    end if
+
+    if expected == "any" then
+        if actual == "null" then return false
+        if actual == "function" then return false
+        return true
+    end if
+
+    if expected == "all" then return true
+
+    return expected == actual
+end function
+
+clojette.guard = function(arity, types, args, argname = null, message=null)
+    argc = args.len
+
+    if not self.checkArity(arity, argc) then
+        if argname != null then return self.lispError(argname + ": invalid arity")
+        return self.lispError("invalid arity")
+    end if
+
+    for i in range(0, argc-1)
+        actual = self.realTypeof(args[i])
+
+        if i >= types.len then
+            expected = types[types.len-1]
+        else
+            expected = types[i]
+        end if
+
+        if not self.matchesType(expected, actual) then
+            if message != null then return self.lispError(message)
+            if argname != null then return self.lispError(argname + ": expected " + str(expected) + ", got " + actual)
+            return self.lispError("expected " + str(expected) + ", got " + actual)
+        end if
+    end for
+
+    return null
+end function
+
+//
+// Clojette Builtins - MiniScript host layer
+//
+clojette.globalEnv.locals["gensym"] = function(args)
+    prefix = "G__"
+    if args.len > 0 then prefix = args[0]
+    __gensym_counter__ = globalEnv.locals["__gensym_counter__"] + 1
+    globalEnv.locals["__gensym_counter__"] = __gensym_counter__
+    return prefix + __gensym_counter__
+end function
+
+// guard!
+clojette.globalEnv.locals["guard"] = function(args)
+    err = clojette.guard("3-5", ["string", "list", "list", "string"], args, "guard")
+    if clojette.isError(err) then return err
+
+    types = args[0]
+    values = args[1]
+    arguments = args[2]
+    name = null
+    msg = null
+    if args.len >= 3 then name = args[3] 
+    if args.len >= 4 then msg = args[4] 
+
+    return clojette.guard(types, values, arguments, name, msg)
+end function
+
+// Arithmetic
+clojette.globalEnv.locals["+"] = function(args)
+    err = clojette.guard("*", [["number", "string", "list", "map"]], args, "+")
+    if clojette.isError(err) then return err
+    
+    sum = 0
+    if args.len == 0 then return 0
+    for i in range(0, args.len-1)
+        sum = sum + args[i]
+    end for
+    return sum
+end function
+
+clojette.globalEnv.locals["-"] = function(args)
+    err = clojette.guard("1+", [["number", "string"]], args, "-")
+    if clojette.isError(err) then return err
+
+    if args.len == 0 then return self.lispError("- requires at least 1 argument")
+    if args.len == 1 then return -args[0]
+    result = args[0]
+    if args.len > 1 then
+        for i in range(1, args.len-1)
+            result = result - args[i]
+        end for
+    end if
+    return result
+end function
+
+clojette.globalEnv.locals["*"] = function(args)
+    err = clojette.guard("*", [["number", "string", "list"]], args, "*")
+    if clojette.isError(err) then return err
+
+    prod = 1
+    if args.len == 0 then return 1
+    for i in range(0, args.len-1)
+        prod = prod * args[i]
+    end for
+    return prod
+end function
+
+clojette.globalEnv.locals["/"] = function(args)
+    err = clojette.guard("1+", [["number", "string", "list"]], args, "/")
+    if clojette.isError(err) then return err
+      
+    if args.len == 0 then return self.lispError("/ requires at least 1 argument")
+    if args.len == 1 then
+        if args[0] == 0 then return self.lispError("Division by zero")
+        return 1 / args[0]
+    end if
+    result = args[0]
+    for i in range(1, args.len-1)
+        if args[i] == 0 then return self.lispError("Division by zero")
+        result = result / args[i]
+    end for
+    return result
+end function
+
+clojette.globalEnv.locals["%"] = function(args)
+    err = clojette.guard("2", ["number"], args, "%")
+    if clojette.isError(err) then return err
+
+    if args[1] == 0 then return self.lispError("Modulo by zero")
+    return args[0] % args[1]
+end function
+
+clojette.globalEnv.locals["mod"] = function(args)
+    err = clojette.guard("2", ["number"], args, "mod")
+    if clojette.isError(err) then return err
+
+    if args[1] == 0 then return self.lispError("Modulo by zero")
+    return args[0] % args[1]
+end function
+
+clojette.globalEnv.locals["**"] = function(args)
+    err = clojette.guard("2", ["number"], args, "**")
+    if clojette.isError(err) then return err
+    return args[0] ^ args[1]
+end function
+
+clojette.globalEnv.locals["quot"] = function(args)
+    err = clojette.guard("2", ["number"], args, "quot")
+    if clojette.isError(err) then return err
+
+    if args.len != 2 then return self.lispError("quot requires exactly 2 arguments")
+    if args[1] == 0 then return self.lispError("Division by zero")
+    return floor(args[0] / args[1])
+end function
+
+// Comparison
+clojette.globalEnv.locals["="] = function(args)
+    err = clojette.guard("2+", ["all"], args)
+    if clojette.isError(err) then return err
+
+    for i in range(1, args.len-1)
+        if args[i] != args[0] then return false
+    end for
+    return true
+end function
+
+clojette.globalEnv.locals["not="] = function(args)
+    err = clojette.guard("2", ["all"], args)
+    if clojette.isError(err) then return err
+    return args[0] != args[1]
+end function
+
+clojette.globalEnv.locals["<"] = function(args)
+    err = clojette.guard("2+", ["all"], args)
+    if clojette.isError(err) then return err
+    for i in range(1, args.len-1)
+        if args[i-1] >= args[i] then return false
+    end for
+    return true
+end function
+
+clojette.globalEnv.locals[">"] = function(args)
+    err = clojette.guard("2+", ["any"], args)
+    if clojette.isError(err) then return err
+    for i in range(1, args.len-1)
+        if args[i-1] <= args[i] then return false
+    end for
+    return true
+end function
+
+clojette.globalEnv.locals["<="] = function(args)
+    err = clojette.guard("2+", ["all"], args)
+    if clojette.isError(err) then return err
+    for i in range(1, args.len-1)
+        if args[i-1] > args[i] then return false
+    end for
+    return true
+end function
+
+clojette.globalEnv.locals[">="] = function(args)
+    err = clojette.guard("2+", ["all"], args)
+    if clojette.isError(err) then return err
+    for i in range(1, args.len-1)
+        if args[i-1] < args[i] then return false
+    end for
+    return true
+end function
+
+clojette.globalEnv.locals["not"] = function(args)
+    err = clojette.guard("1", ["all"], args)
+    if clojette.isError(err) then return err
+    if args.len != 1 then return self.lispError("not requires exactly 1 argument")
+    return not args[0]
+end function
+
+// List operations
+clojette.globalEnv.locals["list"] = function(args)
+  err = clojette.guard("*", ["any"], args, "list")
+  if clojette.isError(err) then return err
+  return [] + args
+end function
+
+clojette.globalEnv.locals["car"] = function(args)
+    err = clojette.guard("1", ["list"], args, "car")
+    if clojette.isError(err) then return err
+
+    lst = args[0]
+    if lst == null or lst.len == 0 then return self.lispError("car called on empty list")
+    return lst[0]
+end function
+
+clojette.globalEnv.locals["cdr"] = function(args)
+    err = clojette.guard("1", ["list"], args, "cdr")
+    if clojette.isError(err) then return err
+
+    lst = args[0]
+    if len(lst) <= 1 then return []
+    return lst[1:]
+end function
+
+clojette.globalEnv.locals["cons"] = function(args)
+    err = clojette.guard("2", ["any", ["list", "null"]], args, "cons")
+    if args[1] == null then return [args[0]]
+    return [args[0]] + args[1]
+end function
+
+clojette.globalEnv.locals["first"] = function(args)
+    err = clojette.guard("1", ["list"], args, "first")
+    if clojette.isError(err) then return err
+
+    lst = args[0]
+    if lst == null or lst.len == 0 then return null
+    return lst[0]
+end function
+
+clojette.globalEnv.locals["second"] = function(args)
+    err = clojette.guard("1", ["list"], args, "second")
+    if clojette.isError(err) then return err
+
+    lst = args[0]
+    if lst == null then return null
+    return lst[1]
+end function
+
+clojette.globalEnv.locals["rest"] = function(args)
+    err = clojette.guard("1", ["list"], args, "rest")
+    if clojette.isError(err) then return err
+
+    lst = args[0]
+    if lst.len <= 1 then return []
+    return lst[1:]
+end function
+
+clojette.globalEnv.locals["conj"] = function(args)
+    err = clojette.guard("2+", [["list", "null"], "any"], args, "conj")
+    if clojette.isError(err) then return err
+
+    result = args[0]
+    if result == null then result = []
+    for i in range(1, args.len-1)
+      result = result + [args[i]]
+    end for
+    return result
+end function
+
+clojette.globalEnv.locals["concat"] = function(args)
+    err = clojette.guard("*", [["list", "null"]], args, "concat")
+    if clojette.isError(err) then return err
+
+    result = []
+    if args.len == 0 then return result
+    for i in range(0, args.len-1)
+        if args[i] != null then result = result + args[i]
+    end for
+    return result
+end function
+
+clojette.globalEnv.locals["empty?"] = function(args)
+    err = clojette.guard("1",[["list", "string", "map", "null"]], args, "empty?")
+    if clojette.isError(err) then return err
+
+    lst = args[0]
+    if lst == null then return true
+    return lst.len == 0
+end function
+
+clojette.globalEnv.locals["count"] = function(args)
+    err = clojette.guard("1", [["list", "string", "map"]], args, "count")
+    if clojette.isError(err) then return err
+    return args[0].len
+end function
+
+clojette.globalEnv.locals["list?"] = function(args)
+    err = clojette.guard("1", ["any"], args, "list?")
+    if clojette.isError(err) then return err
+    return args[0] isa list
+end function
+
+clojette.globalEnv.locals["nth"] = function(args)
+    err = clojette.guard("2", ["list", "number"], args, "nth")
+    if clojette.isError(err) then return err
+
+    lst = args[0]
+    n = args[1]
+    if lst == null or n >= lst.len then return self.lispError("nth index out of bounds")
+    return lst[n]
+end function
+
+clojette.globalEnv.locals["get"] = function(args)
+    err = clojette.guard("2-3", [["list", "map", "string", "null"], "any", "any"], args, "get")
+    if clojette.isError(err) then return err
+
+    coll = args[0]
+    key = args[1]
+    if coll == null then return null
+    if not coll.hasIndex(key) then
+        if args.len == 3 then return args[2]
+        return null
+    end if
+    return @coll[key]
+end function
+
+// Map/dict operations
+clojette.globalEnv.locals["hash-map"] = function(args)
+    err = clojette.guard("*", ["any"], args, "hash-map")
+    if clojette.isError(err) then return err
+
+    result = {}
+    if args.len == 0 then return result
+    if args.len % 2 != 0 then return self.lispError("hash-map requires even number of arguments")
+    for i in range(0, args.len-1, 2)
+        result[args[i]] = @args[i+1]
+    end for
+    return result
+end function
+
+clojette.globalEnv.locals["assoc"] = function(args)
+    err = clojette.guard("3+", [["map", "null"], "any"], args, "assoc")
+    if clojette.isError(err) then return err
+    result = {}
+    if args[0] != null then
+        for kv in args[0]
+            result[kv.key] = @kv.value
+        end for
+    end if
+    for i in range(1, args.len-1, 2)
+        result[args[i]] = @args[i+1]
+    end for
+    return result
+end function
+
+clojette.globalEnv.locals["dissoc"] = function(args)
+    err = clojette.guard("2+", ["map", "any"], args, "dissoc")
+    if clojette.isError(err) then return err
+
+    result = {}
+    for kv in args[0]
+        result[kv.key] = @kv.value
+    end for
+    for i in range(1, args.len-1)
+        result.remove(args[i])
+    end for
+    return result
+end function
+
+clojette.globalEnv.locals["keys"] = function(args)
+    err = clojette.guard("1", [["map", "null"]], args, "keys")
+    if clojette.isError(err) then return err
+
+    if args[0] == null then return []
+    result = []
+    for kv in args[0]
+        result.push(kv.key)
+    end for
+    return result
+end function
+
+clojette.globalEnv.locals["vals"] = function(args)
+    err = clojette.guard("1", [["map", "null"]], args, "vals")
+    if clojette.isError(err) then return err
+
+    if args[0] == null then return []
+    result = []
+    for kv in args[0]
+        result.push(@kv.value)
+    end for
+    return result
+end function
+
+clojette.globalEnv.locals["map?"] = function(args)
+    err = clojette.guard("1", ["all"], args, "map?")
+    if clojette.isError(err) then return err
+    
+    if args.len != 1 then return self.lispError("map? requires exactly 1 argument")
+    return args[0] isa map
+end function
+
+clojette.globalEnv.locals["contains?"] = function(args)
+    err = clojette.guard("2", [["map", "list", "string", "null"], "any"], args, "contains")
+    if args.len != 2 then return self.lispError("contains? requires exactly 2 arguments")
+    if args[0] == null then return false
+    return args[0].hasIndex(args[1])
+end function
+
+// Type checks
+clojette.globalEnv.locals["number?"] = function(args)
+    err = clojette.guard("1", ["all"], args, "number?")
+    if clojette.isError(err) then return err
+    return args[0] isa number
+end function
+
+clojette.globalEnv.locals["string?"] = function(args)
+    err = clojette.guard("1", ["all"], args, "string?")
+    if clojette.isError(err) then return err
+    return args[0] isa string
+end function
+
+clojette.globalEnv.locals["null?"] = function(args)
+    err = clojette.guard("1", ["all"], args, "null?")
+    if clojette.isError(err) then return err
+    return args[0] == null
+end function
+
+clojette.globalEnv.locals["fn?"] = function(args)
+    err = clojette.guard("1", ["all"], args, "fn?")
+    if clojette.isError(err) then return err
+    if args[0] isa funcRef then return true
+    return args[0] isa map and args[0].hasIndex("classID") and args[0]["classID"] == "fn"
+end function
+
+clojette.globalEnv.locals["true?"] = function(args)
+    err = clojette.guard("1", ["all"], args, "true?")
+    if clojette.isError(err) then return err
+    return args[0] == true
+end function
+
+clojette.globalEnv.locals["false?"] = function(args)
+    err = clojette.guard("1", ["all"], args, "false?")
+    if clojette.isError(err) then return err
+    return args[0] == false
+end function
+
+// Math
+clojette.globalEnv.locals["floor"] = function(args)
+    err = clojette.guard("1", ["number"], args)
+    if clojette.isError(err) then return err
+    return floor(args[0])
+end function
+
+clojette.globalEnv.locals["ceil"] = function(args)
+    err = clojette.guard("1", ["number"], args)
+    if clojette.isError(err) then return err
+    return ceil(args[0])
+end function
+
+clojette.globalEnv.locals["round"] = function(args)
+    err = clojette.guard("1", ["number"], args)
+    if clojette.isError(err) then return err
+    return round(args[0])
+end function
+
+clojette.globalEnv.locals["abs"] = function(args)
+    err = clojette.guard("1", ["number"], args)
+    if clojette.isError(err) then return err
+    return abs(args[0])
+end function
+
+clojette.globalEnv.locals["sqrt"] = function(args)
+    err = clojette.guard("1", ["number"], args)
+    if clojette.isError(err) then return err
+    return sqrt(args[0])
+end function
+
+clojette.globalEnv.locals["max"] = function(args)
+    err = clojette.guard("1+", ["number"], args)
+    if clojette.isError(err) then return err
+    result = args[0]
+    if args.len > 1 then
+        for i in range(1, args.len-1)
+            if args[i] > result then result = args[i]
+        end for
+    end if
+    return result
+end function
+
+clojette.globalEnv.locals["min"] = function(args)
+    err = clojette.guard("1+", ["number"], args)
+    if clojette.isError(err) then return err
+    result = args[0]
+    if args.len > 1 then
+        for i in range(1, args.len-1)
+            if args[i] < result then result = args[i]
+        end for
+    end if
+    return result
+end function
+
+// String operations
+clojette.globalEnv.locals["str"] = function(args)
+    err = clojette.guard("*", ["all"], args)
+    if clojette.isError(err) then return err
+    result = ""
+    if args.len == 0 then return result
+    for i in range(0, args.len-1)
+        result = result + str(args[i])
+    end for
+    return result
+end function
+
+clojette.globalEnv.locals["split"] = function(args)
+    err = clojette.guard("2", ["string", "string"], args)
+    if clojette.isError(err) then return err
+    return args[0].split(args[1])
+end function
+
+clojette.globalEnv.locals["join"] = function(args)
+    err = clojette.guard("2", ["list", "string"], args)
+    if clojette.isError(err) then return err
+    return args[0].join(args[1])
+end function
+
+clojette.globalEnv.locals["trim"] = function(args)
+    err = clojette.guard("1", ["string"], args)
+    if clojette.isError(err) then return err
+    return args[0].trim
+end function
+
+clojette.globalEnv.locals["index-of"] = function(args)
+    err = clojette.guard("2", ["string", "string"], args)
+    if clojette.isError(err) then return err
+    if args.len != 2 then return self.lispError("index-of requires exactly 2 arguments")
+    return args[0].indexOf(args[1])
+end function
+
+clojette.globalEnv.locals["subs"] = function(args)
+    err = clojette.guard("2-3", ["string", "number", "number"], args)
+    if clojette.isError(err) then return err
+    if args.len == 2 then return args[0][args[1]:]
+    return args[0][args[1]:args[2]]
+end function
+
+clojette.globalEnv.locals["upper-case"] = function(args)
+    err = clojette.guard("1", ["string"], args)
+    if clojette.isError(err) then return err
+    return args[0].upper
+end function
+
+clojette.globalEnv.locals["lower-case"] = function(args)
+    err = clojette.guard("1", ["string"], args)
+    if clojette.isError(err) then return err
+    return args[0].lower
+end function
+
+clojette.globalEnv.locals["replace"] = function(args)
+    err = clojette.guard("3", ["string", "string", "string"], args)
+    if clojette.isError(err) then return err
+    haystack = args[0]
+    needle = args[1]
+    replacement = args[2]
+    if needle == "" then return self.lispError("replace: needle cannot be empty")
+    return haystack.replace(needle, replacement)
+end function
+
+// I/O
+clojette.globalEnv.locals["println"] = function(args)
+    if args.len == 0 then
+        print("")
+        return null
+    end if
+    parts = []
+    for i in range(0, args.len-1)
+        parts.push(str(@args[i]))
+    end for
+    print(parts.join(" "))
+    return null
+end function
+
+clojette.globalEnv.locals["user-input"] = function(args)
+    if args.len > 0 then return user_input(args[0])
+    return user_input("")
+end function
+
+// Apply - needed for higher order functions
+clojette.globalEnv.locals["apply"] = function(args)
+    err = clojette.guard("2", ["function", "list"], args)
+    if clojette.isError(err) then return err
+    fn = @args[0]
+    argList = args[1]
+    return callFunction(@fn, argList, "apply")
+end function
+
+clojette.globalEnv.locals["take-keys"] = function(args)
+    err = clojette.guard("1", ["any"], args)
+    if clojette.isError(err) then return err
+
+    bindings = args[0]
+    if bindings isa list and len(bindings) > 0 and bindings[0] == "array" then
+        bindings = bindings[1:]
+    end if
+    result = []
+    for i in range(0, len(bindings)-1, 2)
+        result.push(bindings[i])
+    end for
+    return result
+end function
+
+clojette.globalEnv.locals["take-vals"] = function(args)
+    err = clojette.guard("1", ["any"], args)
+    if clojette.isError(err) then return err
+
+    bindings = args[0]
+    if bindings isa list and bindings.len > 0 and bindings[0] == "array" then
+        bindings = bindings[1:]
+    end if
+    result = []
+    for i in range(1, bindings.len-1, 2)
+        result.push(bindings[i])
+    end for
+    return result
+end function
+
+// Constants
+clojette.globalEnv.locals["true"] = true
+clojette.globalEnv.locals["false"] = false
+clojette.globalEnv.locals["null"] = null
+clojette.globalEnv.locals["nil"] = null
+
+// helpers
+clojette.atom = function(token)
+	// We dereference the token to not invoke anything by accident
+  if @token isa number then return token
+	if @token isa funcRef then return self.lispError("Tried evaluating funcRef as an atom?")
+	// Return full string literal
+	if token[0] == """" then return token
+    num = token.val
+    if str(num) == token then return num
+    return token
+end function
+
+// We can check if a given result is an error; we want error handling
+clojette.isError = function(val)
+  if not @val isa map then return false
+  // We know that the op is a map, and potentially is an error; safe to handle without deref 
+  if @val.hasIndex("classID") and @val["classID"] == "error" then
+    if not @val.hasIndex("__tag__") then return false
+    return @val["__tag__"] == @__runtimeTag__
+  end if
+	return false
+end function
+
+clojette.addTrace = function(err, frame)
+    if not err.hasIndex("trace") then err["trace"] = []
+    err["trace"].push(frame)
+    return err
+end function
+
+clojette.isRuntimeObject = function(val)
+    if not @val isa map then return false
+    if not val.hasIndex("__tag__") then return false
+    return @val["__tag__"] == @__runtimeTag__
+end function
+
+// There was an error here, where we were trying to check if op was a funcRef
+// that check was not dereferenced and we called it directly -_-
+// Lesson learned, always deref your functions
+clojette.callFunction = function(op, args, name, isNative=false)
+    if self.isError(@op) then return @op
+    
+    // User-defined Clojette fn
+    if @op isa map then
+        if op.hasIndex("classID") and op["classID"] == "fn" then
+            while true
+                newEnv = self.bindArgs(op["args"], args, op["env"])
+                if self.isError(@newEnv) then return newEnv
+                result = null
+                for bodyExpr in op["body"]
+                    result = self.eval(bodyExpr, newEnv)
+                    if self.isError(@result) then return self.addTrace(@result, "in " + name)
+                end for
+                // check if recur was signalled
+                if result isa map and result.hasIndex("classID") and result["classID"] == "recur" then
+                    args = result["args"]
+                else
+                    return result
+                end if
+            end while
+        end if
+    end if
+
+    // funcRef - either stdlib or native MiniScript
+    if @op isa funcRef or typeof(@op) == "function" then
+        if isNative then
+            if args.len == 0 then return @op()
+            if args.len == 1 then return @op(args[0])
+            if args.len == 2 then return @op(args[0], args[1])
+            if args.len == 3 then return @op(args[0], args[1], args[2])
+            if args.len == 4 then return @op(args[0], args[1], args[2], args[3])
+            if args.len == 5 then return @op(args[0], args[1], args[2], args[3], args[4])
+            return self.lispError("Native functions support at most 5 arguments")
+        else
+            return op(@args)
+        end if
+    end if
+    
+    return self.lispError("Not a function: " + name)
+end function
+
+clojette.evalQuasiquote = function(exp, env)
+    // not a list, just return it as-is (like quote)
+    if not @exp isa list then return exp
+    // empty list
+    if @exp.len == 0 then return exp
+    
+    // unquote: evaluate and return
+    if exp[0] == "unquote" then
+		result = self.eval(exp[1], env)
+    if self.isError(@result) then return result
+		return result
+    end if
+    
+    // walk the list, handling splice-unquote
+    result = []
+    for i in range(0, exp.len-1)
+        item = exp[i]
+        if item isa list and item.len > 0 and item[0] == "splice-unquote" then
+          spliced = self.eval(item[1], env)
+          if self.isError(@spliced) then return spliced
+          if not @spliced isa list then return self.lispError("splice-unquote requires a list, got: " + typeof(@spliced))
+            if spliced.len > 0 then
+              for j in range(0, spliced.len-1)
+                result.push(spliced[j])
+              end for
+            end if
+        else
+    	    item = self.evalQuasiquote(@item, env)
+    		  if self.isError(@item) then return item
+    		  result.push(@item)
+        end if
+    end for
+    return result
+end function
+
+// Convert a string of characters into a list of tokens
+clojette.tokenize = function(chars)
+    tokens = []
+    //if tokens.len == 0 then return self.lispError("Unexpected EOF")
+    //if self.isError(tokens[0]) then return tokens.pull  // propagate tokenizer errors
+    i = 0
+    while i < chars.len
+      c = chars[i]
+		  if c == """" then
+    		tok = c
+    		i = i + 1
+    		while i < chars.len and chars[i] != """"
+        	if chars[i] == "\" then
+            tok = tok + chars[i]
+            i = i + 1
+            if i < chars.len then tok = tok + chars[i]
+        	else
+            tok = tok + chars[i]
+        	end if
+        	i = i + 1
+    		end while
+    		if i >= chars.len then
+        	tokens.push(self.lispError("Unterminated string literal: " + tok))
+        	return tokens
+    		end if
+    		tok = tok + """"
+    		tokens.push(tok)
+        else if c == "(" or c == ")" or c == "[" or c == "]" or c == "{" or c == "}" then
+          tokens.push(c)
+        else if c == "~" then
+          if i + 1 < chars.len and chars[i+1] == "@" then
+            tokens.push("~@")
+            i = i + 1
+          else
+            tokens.push("~")
+          end if
+        else if c == "'" or c == "`" then
+            tokens.push(c)
+        else if c == " " or c == char(9) or c == char(10) or c == char(13) then
+            // whitespace, skip
+        else if c == ";" then
+            // comment, skip to end of line
+            while i < chars.len and chars[i] != char(10)
+              i = i + 1
+            end while
+        else
+          tok = c
+          while i + 1 < chars.len and " ()[]{}""';`," .indexOf(chars[i+1]) == null
+            i = i + 1
+            tok = tok + chars[i]
+          end while
+          tokens.push(tok.trim)
+        end if
+        i = i + 1
+    end while
+    return tokens
+end function
+
+
+//  @Doc
+//  This is the reader. The reader takes in a list of tokens
+//  and then reads those tokens recursively. The reader 
+//  mutates the tokens for some syntax sugar.
+//  Macros depend on this, for example.
+//
+clojette.readFromTokens = function(tokens)
+    // We don't want an empty list
+    if tokens.len == 0 then return self.lispError("Unexpected EOF")
+    // We also dont want anything that is NOT a list
+    if not @tokens isa list then return self.lispError("Not a list")
+    token = tokens.pull
+    
+    // We encountered a symbol, parse it recursively
+	  if token == "(" then
+    	L = []
+    	while tokens.len > 0 and tokens[0] != ")"
+        item = self.readFromTokens(tokens)
+        if self.isError(@item) then return item
+        L.push(item)
+    	end while
+    	if tokens.len == 0 then return self.lispError("Unexpected EOF while reading list")
+    	tokens.pull  // consume the )
+    	return L
+
+    // Handle arrays
+    else if token == "[" then
+      L = []
+      while tokens.len > 0 and tokens[0] != "]"
+          item = self.readFromTokens(tokens)
+          if self.isError(@item) then return item
+          L.push(item)
+      end while
+      if tokens.len == 0 then return self.lispError("Unexpected EOF while reading vector")
+      tokens.pull  // consume the ]
+      return ["array"] + L
+
+    // Handle hash maps
+    else if token == "{" then
+      L = []
+      while tokens.len > 0 and tokens[0] != "}"
+          item = self.readFromTokens(tokens)
+          if self.isError(@item) then return item
+          L.push(item)
+      end while
+      if tokens.len == 0 then return self.lispError("Unexpected EOF while reading map")
+      tokens.pull  // consume the }
+      return ["hash-map"] + L
+      
+      else if token == ")" then
+  		return self.lispError("Unexpected )")
+      else if token == "]" then
+        return self.lispError("Unexpected ]")
+      else if token == "}" then
+        return self.lispError("Unexpected }")
+
+    // Handle syntax sugar for anonymous functions...
+    else if token == "#" then
+      if tokens[0] == "(" then
+        tokens.pull // consume (
+        expr = self.readFromTokens(tokens)
+        if @isError(@expr) then return expr
+        if tokens[0] != ")" then return self.lispError("Expected ) after #(...)")
+        tokens.pull  // consume )
+        return ["fn", expr] // Return anonymous function.
+      end if
+      // In the future, if I need other # forms, they are added here.
+
+  
+    // quote tokens for macroing around
+  	else if token == "'" then
+    	inner = self.readFromTokens(tokens)
+    	if self.isError(@inner) then return inner
+      return ["quote", inner]
+  	else if token == "`" then
+      inner = self.readFromTokens(tokens)
+      if self.isError(@inner) then return inner
+      return ["quasiquote", inner]
+  	else if token == "~@" then
+      inner = self.readFromTokens(tokens)
+      if self.isError(@inner) then return inner
+      return ["splice-unquote", inner]
+  	else if token == "~" then
+      inner = self.readFromTokens(tokens)
+      if self.isError(@inner) then return inner
+      return ["unquote", inner]
+    // TODO: Fix gensym because this is NOT working
+    //else if token[token.len-1] == "#" then // Runtime gensym?
+      //return ["gensym", token[0:token.len - 1]]
+    // Return an atom, we can let the MiniScript type coercion do everything for us
+    else 
+  	return self.atom(token)
+  end if
+end function
+
+// @Doc
+// This is the parser
+// It takes in code, tokenizes it, and returns te AST.
+// 
+clojette.parse = function(code)
+    tokens = self.tokenize(code)
+    result = self.readFromTokens(tokens)
+    if self.isError(@result) then return result
+    if tokens.len > 0 then return self.lispError("Unexpected trailing tokens: " + tokens.join(" "))
+    return result
+end function
+
+clojette.eval = function(exp, env)
+	if @exp isa number then return exp
+	if @exp == null then return null
+
+  if @exp isa list then
+    if exp.len == 0 then return exp
+
+    first = exp[0]
+
+    // handle special forms first
+		if first == "quasiquote" then
+    	return self.evalQuasiquote(exp[1], env)
+		end if
+
+		// Game interop
+		if first isa string and first[0] == "." then
+    	methodName = first[1:]
+    	obj = self.eval(exp[1], env)
+    	if @obj == null then return self.lispError("null object in interop call ." + methodName)
+      if self.isError(@obj) then return self.addTrace(@obj, "in " + first) // Check for errors!    
+
+    		fn = @obj[methodName]
+
+    		if not (@fn isa funcRef) then return @fn
+
+    		args = []
+    		if exp.len > 2 then
+        	for i in range(2, exp.len-1)
+          result = self.eval(exp[i], env)
+          if self.isError(@result) then return @result
+            args.push(@result)
+        	end for
+    		end if
+
+    		// pass obj as self, then spread remaining args
+    		if args.len == 0 then return fn(@obj)
+    		if args.len == 1 then return fn(@obj, args[0])
+    		if args.len == 2 then return fn(@obj, args[0], args[1])
+    		if args.len == 3 then return fn(@obj, args[0], args[1], args[2])
+    		if args.len == 4 then return fn(@obj, args[0], args[1], args[2], args[3])
+    		if args.len == 5 then return fn(@obj, args[0], args[1], args[2], args[3], args[4])
+    		return self.lispError("Too many arguments for native method")
+    end if
+
+    if first == "array" then
+    		result = []
+    		if exp.len > 1 then
+        		for i in range(1, exp.len-1)
+            		val = self.eval(exp[i], env)
+            		if self.isError(@val) then return val
+            		result.push(val)
+        		end for
+    		end if
+      return result
+    end if
+
+    if first == "import" then
+      path = exp[1]  // don't eval, take the raw token
+    	// strip quotes if present
+    	if path[0] == """" then path = path[1:-1]
+
+    	//path = self.eval(exp[1], env)
+    	hostComputer = get_shell.host_computer
+      fpath = get_abs_path(path)
+    	f = hostComputer.File(fpath)
+    	
+      if f == null then return self.lispError("Error: file not found: " + path)
+    	if f.is_binary then return self.lispError("Error: cannot import binary file: " + path)
+    	contents = f.get_content
+    	if contents == null then return self.lispError("Error: no read permission: " + path)
+    	wrapped = "(do " + contents + ")"
+      result = self.parse(wrapped)
+      if self.isError(@result) then return result
+    	return self.eval(result, env)
+		end if
+	
+		if first == "set!" then
+    	name = exp[1]
+    	value = self.eval(exp[2], env)
+			if self.isError(@value) then return value
+    		return env.setExisting(name, value)
+		end if
+
+		if self.globalEnv.locals["macros"].hasIndex(first) then
+    	macroFn = self.globalEnv.locals["macros"][first]  // no .get!
+   		newExp = macroFn(exp[1:])
+			res = self.eval(newExp, env)
+			if self.isError(@res) then return res
+    		return res
+		end if
+
+		if first == "defmacro" then
+    		name = exp[1]
+    		argNames = exp[2]
+    		if argNames isa list and argNames.len > 0 and argNames[0] == "array" then
+        		argNames = argNames[1:]
+    		end if
+    		body = exp[3]
+    		closedEnv = env
+    
+			macroFn = function(forms)
+    			__argNames = argNames  // capture locally
+    			__body = body          // capture locally
+    			__closedEnv = closedEnv
+    			newEnv = self.makeEnv(__closedEnv)
+    			if __argNames.len > 0 and forms.len > 0 then
+        			for i in range(0, __argNames.len-1)
+            			if __argNames[i] == "&" then
+                			restName = __argNames[i+1]
+                			if i >= forms.len then
+                    		newEnv.set(restName, [])
+                			else
+                    			newEnv.set(restName, forms[i:])
+                			end if
+                			break
+            			end if
+            			if i >= forms.len then
+                			newEnv.set(__argNames[i], null)
+            			else
+                			newEnv.set(__argNames[i], forms[i])
+            			end if
+        			end for
+    			end if
+    			return self.eval(__body, newEnv)
+			end function
+    
+    		self.globalEnv.locals["macros"][name] = @macroFn
+    		return name
+		end if
+	
+		if first == "recur" then
+    		args = []
+    		if exp.len > 1 then
+        		for i in range(1, exp.len-1)
+        			result = self.eval(exp[i], env)
+       				if self.isError(result) then return result
+        			args.push(result)
+        		end for
+    		end if
+    		return {"classID": "recur", "args": args}
+		end if
+	
+		// try/catch special form in eval
+		if first == "try" then
+    		body = exp[1]
+    		result = self.eval(body, env)
+    		if self.isError(@result) then
+    		    if exp.len < 3 then return result
+    		    catchClause = exp[2]
+        		catchBindings = catchClause[1]
+        		if catchBindings isa list and catchBindings.len > 0 and catchBindings[0] == "array" then
+        		    catchBindings = catchBindings[1:]
+        		end if
+        		catchEnv = self.makeEnv(env)
+        		if catchBindings.len > 0 then
+        		    catchEnv.set(catchBindings[0], result["message"])
+        		end if
+        		return self.eval(catchClause[2], catchEnv)
+    		end if
+    		return result
+		end if
+
+		if first == "throw" then
+    		msg = self.eval(exp[1], env)
+    		if self.isError(msg) then return msg
+    		return self.lispError(msg)
+		end if
+	
+		if first == "apply" then
+    		fn = self.eval(exp[1], env)
+    		argList = self.eval(exp[2], env)
+			  if self.isError(@fn) then return fn
+			  if self.isError(@argList) then return argList
+    		if not @argList isa list then return self.lispError("Apply requires a list as second argument")
+    		isNative = self.globalEnv.natives.hasIndex(exp[1])
+        res = self.callFunction(@fn, @argList, @exp[1], isNative)
+        if self.isError(@res) then return self.addTrace(@res, "in " + first) 
+    		return res
+		end if
+	
+		if first == "and" then
+    		result = true
+			  if exp.len > 1 then
+    			for i in range(1, exp.len-1)
+        		result = self.eval(exp[i], env)
+					if self.isError(@result) then return result
+					if not result then return result
+    			end for
+			  end if
+    		return result
+		end if
+
+		if first == "or" then
+    		if exp.len == 1 then return null  // (or) with no args
+    		for i in range(1, exp.len-1)
+        		result = self.eval(exp[i], env)
+				if self.isError(@result) then return result
+        		if result then return result  // short circuit, return truthy value
+    		end for
+    		return false
+		end if
+
+        if first == "quote" then
+            return exp[1]
+        end if
+
+		if first == "let" then
+    		bindings = exp[1]
+    		if bindings isa list and bindings.len > 0 and bindings[0] == "array" then
+        		bindings = bindings[1:]
+    		end if
+    		body = exp[2]
+    		newEnv = self.makeEnv(env)
+    		if bindings.len > 0 then
+        		for i in range(0, bindings.len-1, 2)
+            		value = self.eval(bindings[i+1], newEnv)
+            		if self.isError(@value) then return value
+            		newEnv.set(bindings[i], value)
+        		end for
+    		end if
+    		return self.eval(body, newEnv)
+		end if
+	
+		if first == "do" then
+    		result = null
+    		if exp.len > 1 then
+        		for i in range(1, exp.len-1)
+            		result = self.eval(exp[i], env)
+					if self.isError(@result) then return result
+        		end for
+    		end if
+    		return result
+		end if
+	
+      if first == "if" then
+        cond = self.eval(exp[1], env)
+			  if self.isError(@cond) then return cond
+        if @cond then
+          return self.eval(exp[2], env)
+			  else
+    		  if exp.len > 3 then return self.eval(exp[3], env)
+    			return null
+			  end if
+      end if
+
+		if first == "ns" then
+			nsName = exp[1]
+    	if nsName isa list then nsName = exp[1][1]  // handle quoted ns names
+   		namespaces = self.globalEnv.locals["__namespaces__"]
+    	if not namespaces.hasIndex(nsName) then
+        namespaces[nsName] = {}
+        self.globalEnv.locals["__ns_aliases__"][nsName] = {}
+    	end if
+    	self.globalEnv.locals["__current_ns__"] = nsName
+    	return nsName
+		end if
+
+		if first == "def" or first == "define" then
+    	name = exp[1]
+    	value = self.eval(exp[2], env)
+    	if self.isError(@value) then return value
+			currentNs = self.globalEnv.locals["__current_ns__"]
+			self.globalEnv.locals["__namespaces__"][currentNs][name] = @value
+    	env.set(name, value)
+    	return value
+		end if
+
+		if first == "fn" then
+      params = exp[1]
+      if params isa list and params.len > 0 and params[0] == "array" then
+      		params = params[1:]
+    	end if
+    	return {"classID": "fn", "args": params, "body": exp[2:], "env": env}
+		end if
+
+    // Handle syntax for (:x map), basically looks up stuff from maps using keywords.
+    // Very Clojure-esque.
+    if first[0] == ":" and @exp[1] isa map then
+      if self.isError(@exp[1]) then return @exp[1] // Check if 2nd element is an error, and return early... Is this more efficient? No clue.
+      if exp[1].hasIndex(first) then return exp[1][first] 
+      // Map doesnt have index for :x, so we perform a lookup for x
+      if exp[1].hasIndex(first[1:]) then return exp[1][first[1:]]
+      return self.lispError("Key " + first + " not found from map " + @exp[1])
+    end if
+        
+		// normal function call
+		op = self.eval(first, env)
+		if self.isError(@op) then return op
+		args = []
+		if exp.len > 1 then
+    	for i in range(1, exp.len-1)
+      	val = self.eval(exp[i], env)
+			  if self.isError(@val) then return val
+        args.push(@val)
+    	end for
+		end if
+		isNative = self.globalEnv.natives.hasIndex(first)
+    res = self.callFunction(@op, @args, @first, isNative)
+    if self.isError(@res) then return self.addTrace(@res, " in " + first)
+		return res
+	  
+    else if @exp isa string then
+    	// keywords are self-evaluating
+    	if exp[0] == ":" then return exp
+    	if exp[0] == """" then return exp[1:-1]  // string literal, strip quotes
+
+		if exp.indexOf("/") != null then
+    	parts = exp.split("/")
+    	if parts.len == 2 and parts[0] != "" and parts[1] != "" then
+      	alias = parts[0]
+      	sym = parts[1]
+      	currentNs = self.globalEnv.locals["__current_ns__"]
+      	aliases = self.globalEnv.locals["__ns_aliases__"][currentNs]
+      	if aliases.hasIndex(alias) then
+          fullNs = aliases[alias]
+      	else
+        	fullNs = alias
+      	end if
+      	namespaces = self.globalEnv.locals["__namespaces__"]
+      	if not namespaces.hasIndex(fullNs) then return self.lispError("No such namespace: " + fullNs)
+      	if not namespaces[fullNs].hasIndex(sym) then return self.lispError("No such var: " + exp)
+      	return @namespaces[fullNs][sym]
+      end if
+    end if
+
+    	return env.get(@exp)  // walks the chain, errors if not found
+    else
+        return exp
+    end if
+end function
+
+clojette.nativeFns = {
+    "get_shell": @get_shell,
+    "get_router": @get_router,
+    "nslookup": @nslookup,
+    "whois": @whois,
+    "is_valid_ip": @is_valid_ip,
+    "is_lan_ip": @is_lan_ip,
+    "active_user": @active_user,
+    "home_dir": @home_dir,
+    "program_path": @program_path,
+    "current_path": @current_path,
+    "parent_path": @parent_path,
+    "get_abs_path": @get_abs_path,
+    "include_lib": @include_lib,
+	  "yield": @yield,
+    "exit": @exit,
+    "wait": @wait,
+    "time": @time,
+    "current_date": @current_date,
+    "char": @char,
+    "pi": @pi,
+    "rnd": @rnd,
+    "val": @val,
+    "slice": @slice,
+    "typeof": @typeof,
+    "globals": @globals,
+    "format-columns": @format_columns,
+    "md5": @md5,
+    "get-custom-object": @get_custom_object,
+    "cob": @get_custom_object,
+    "cd": @cd,
+    "hash": @hash,
+    "poll-input": @poll_input,
+}
+
+for kv in clojette.nativeFns
+    clojette.globalEnv.locals[kv.key] = @kv.value
+    clojette.globalEnv.natives[kv.key] = true
 end for
-if ϴ isa map and ϴ.hasIndex(Т) and ϴ[Т]==Ы then
-m=ϴ[Ь]
-else
-return ϴ
-end if
-end while
-end if
-end if
-if @l isa funcRef or typeof(@l)=="function" then
-if Н then
-if m.len==0 then return @l
-if m.len==1 then return @l(m[0])
-if m.len==2 then return @l(m[0],m[1])
-if m.len==3 then return @l(m[0],m[1],m[2])
-if m.len==4 then return @l(m[0],m[1],m[2],m[3])
-if m.len==5 then return @l(m[0],m[1],m[2],m[3],m[4])
-return K("Native functions support at most 5 arguments")
-else
-return l(@m)
-end if
-end if
-return K("Not a function: "+name)
+
+clojette.tests = false
+
+// REPL
+clojette.repl = function(prompt="Clojette> ")
+  while true
+      input = user_input(prompt)
+      if input == "exit" or input == "quit" or input == "q" then break
+      result = self.eval(self.parse(input), self.globalEnv)
+      if self.isError(@result) then
+        print("ERROR: " + result["message"])
+        if result.hasIndex("trace") and result["trace"].len > 0 then
+          for frame in result["trace"]
+            print(frame)
+          end for
+        end if
+      else
+        print(result)
+      end if
+  end while
+end function
+
+// Expose a function that evaluates code that is given to it :p
+clojette.eval_clojette = function(code, env=self.globalEnv)
+  code = "(do " + code + " )"
+  return self.eval(self.parse(code), env)
 end function
-Q=function(q,r)
-if not @q isa list then return q
-if @q.len==0 then return q
-if q[0]=="unquote" then
-ϴ=U(q[1],r)
-if M(@ϴ) then return ϴ
-return ϴ
-end if
-ϴ=[]
-for s in range(0,q.len-1)
-u=q[s]
-if u isa list and u.len>0 and u[0]=="splice-unquote" then
-v=U(u[1],r)
-if M(@v) then return v
-if not @v isa list then return K("splice-unquote requires a list, got: "+typeof(@v))
-if v.len>0 then
-for w in range(0,v.len-1)
-ϴ.push(v[w])
-end for
-end if
-else
-u=Q(@u,r)
-if M(@u) then return u
-ϴ.push(@u)
-end if
-end for
-return ϴ
-end function
-R=function(y)
-z=[]
-s=0
-while s<y.len
-_=y[s]
-if _==Ц then
-ϩ=_
-s=s+1
-while s<y.len and y[s]!=Ц
-if y[s]=="\" then
-ϩ=ϩ+y[s]
-s=s+1
-if s<y.len then ϩ=ϩ+y[s]
-else
-ϩ=ϩ+y[s]
-end if
-s=s+1
-end while
-if s>=y.len then
-z.push(K("Unterminated string literal: "+ϩ))
-return z
-end if
-ϩ=ϩ+Ц
-z.push(ϩ)
-else if _=="(" or _==Ш or _=="[" or _=="]" then
-z.push(_)
-else if _=="~" then
-if s+1<y.len and y[s+1]=="@" then
-z.push("~@")
-s=s+1
-else
-z.push("~")
-end if
-else if _=="'" or _=="`" then
-z.push(_)
-else if _==" " or _==char(9) or _==char(10) or _==char(13) then
-else if _==";" then
-while s<y.len and y[s]!=char(10)
-s=s+1
-end while
-else
-ϩ=_
-while s+1<y.len and " ()[]{}""';`,".indexOf(y[s+1])==Ч
-s=s+1
-ϩ=ϩ+y[s]
-end while
-z.push(ϩ.trim)
-end if
-s=s+1
-end while
-return z
-end function
-S=function(z)
-if z.len==0 then return K("Unexpected EOF")
-if not @z isa list then return K("Not a list")
-t=z.pull
-if t=="(" then
-Ϫ=[]
-while z.len>0 and z[0]!=Ш
-u=S(z)
-if M(@u) then return u
-Ϫ.push(u)
-end while
-if z.len==0 then return K("Unexpected EOF while reading list")
-z.pull
-return Ϫ
-else if t=="[" then
-Ϫ=[]
-while z.len>0 and z[0]!="]"
-u=S(z)
-if M(@u) then return u
-Ϫ.push(u)
-end while
-if z.len==0 then return K("Unexpected EOF while reading vector")
-z.pull
-return [Щ]+Ϫ
-else if t==Ш then
-return K("Unexpected )")
-else if t=="]" then
-return K("Unexpected ]")
-else if t=="'" then
-Ϭ=S(z)
-if M(@Ϭ) then return Ϭ
-return [и,Ϭ]
-else if t=="`" then
-Ϭ=S(z)
-if M(@Ϭ) then return Ϭ
-return ["quasiquote",Ϭ]
-else if t=="~@" then
-Ϭ=S(z)
-if M(@Ϭ) then return Ϭ
-return ["splice-unquote",Ϭ]
-else if t=="~" then
-Ϭ=S(z)
-if M(@Ϭ) then return Ϭ
-return ["unquote",Ϭ]
-else
-return ϫ(t)
-end if
-end function
-T=function(code)
-z=R(code)
-ϴ=S(z)
-if M(@ϴ) then return ϴ
-if z.len>0 then return K("Unexpected trailing tokens: "+z.join(" "))
-return ϴ
-end function
-U=function(q,r)
-if @q isa number then return q
-if @q==Ч then return Ч
-if @q isa list then
-if q.len==0 then return q
-ϭ=q[0]
-if ϭ=="quasiquote" then
-return Q(q[1],r)
-end if
-if ϭ isa string and ϭ[0]=="." then
-Ϯ=ϭ[1:]
-ϯ=U(q[1],r)
-if @ϯ==Ч then return K("null object in interop call ."+Ϯ)
-if M(@ϯ) then return N(@ϯ,Ю+ϭ)
-ϰ=@ϯ[Ϯ]
-if not (@ϰ isa funcRef) then return @ϰ
-m=[]
-if q.len>2 then
-for s in range(2,q.len-1)
-ϴ=U(q[s],r)
-if M(@ϴ) then return @ϴ
-m.push(@ϴ)
-end for
-end if
-if m.len==0 then return ϰ(@ϯ)
-if m.len==1 then return ϰ(@ϯ,m[0])
-if m.len==2 then return ϰ(@ϯ,m[0],m[1])
-if m.len==3 then return ϰ(@ϯ,m[0],m[1],m[2])
-if m.len==4 then return ϰ(@ϯ,m[0],m[1],m[2],m[3])
-return K("Too many arguments for native method")
-end if
-if ϭ==Щ then
-ϴ=[]
-if q.len>1 then
-for s in range(1,q.len-1)
-val=U(q[s],r)
-if M(@val) then return val
-ϴ.push(val)
-end for
-end if
-return ϴ
-end if
-if ϭ=="import" then
-path=q[1]
-if path[0]==Ц then path=path[1:-1]
-ϱ=get_shell.host_computer
-ϲ=get_abs_path(path)
-ϳ=ϱ.File(ϲ)
-if ϳ==Ч then return K("Error: file not found: "+path)
-if ϳ.is_binary then return K("Error: cannot import binary file: "+path)
-ϵ=ϳ.get_content
-if ϵ==Ч then return K("Error: no read permission: "+path)
-϶="(do "+ϵ+Ш
-ϴ=T(϶)
-if M(@ϴ) then return ϴ
-return U(ϴ,r)
-end if
-if ϭ==й then
-name=q[1]
-d=U(q[2],r)
-if M(@d) then return d
-return r.setExisting(name,d)
-end if
-if Y.locals[Ъ].hasIndex(ϭ) then
-ϸ=Y.locals[Ъ][ϭ]
-Ϲ=ϸ(q[1:])
-Ϻ=U(Ϲ,r)
-if M(@Ϻ) then return Ϻ
-return Ϻ
-end if
-if ϭ=="defmacro" then
-name=q[1]
-ϻ=q[2]
-if ϻ isa list and ϻ.len>0 and ϻ[0]==Щ then
-ϻ=ϻ[1:]
-end if
-ϼ=q[3]
-Ͻ=r
-ϸ=function(Ў)
-Џ=ϻ
-А=ϼ
-Б=Ͻ
-o=V(Б)
-if Џ.len>0 and Ў.len>0 then
-for s in range(0,Џ.len-1)
-if Џ[s]=="&" then
-В=Џ[s+1]
-if s>=Ў.len then
-o.set(В,[])
-else
-o.set(В,Ў[s:])
-end if
-break
-end if
-if s>=Ў.len then
-o.set(Џ[s],Ч)
-else
-o.set(Џ[s],Ў[s])
-end if
-end for
-end if
-return U(А,o)
-end function
-Y.locals[Ъ][name]=@ϸ
-return name
-end if
-if ϭ==Ы then
-m=[]
-if q.len>1 then
-for s in range(1,q.len-1)
-ϴ=U(q[s],r)
-if M(ϴ) then return ϴ
-m.push(ϴ)
-end for
-end if
-return {Т:Ы,Ь:m}
-end if
-if ϭ=="try" then
-ϼ=q[1]
-ϴ=U(ϼ,r)
-if M(@ϴ) then
-if q.len<3 then return ϴ
-Ͼ=q[2]
-Ͽ=Ͼ[1]
-if Ͽ isa list and Ͽ.len>0 and Ͽ[0]==Щ then
-Ͽ=Ͽ[1:]
-end if
-Ѐ=V(r)
-if Ͽ.len>0 then
-Ѐ.set(Ͽ[0],ϴ[Э])
-end if
-return U(Ͼ[2],Ѐ)
-end if
-return ϴ
-end if
-if ϭ=="throw" then
-h=U(q[1],r)
-if M(h) then return h
-return K(h)
-end if
-if ϭ==н then
-ϰ=U(q[1],r)
-Ђ=U(q[2],r)
-if M(@ϰ) then return ϰ
-if M(@Ђ) then return Ђ
-if not @Ђ isa list then return K("Apply requires a list as second argument")
-Н=Y.natives.hasIndex(q[1])
-Ϻ=P(@ϰ,@Ђ,@q[1],Н)
-if M(@Ϻ) then return N(@Ϻ,Ю+ϭ)
-return Ϻ
-end if
-if ϭ=="and" then
-ϴ=1
-if q.len>1 then
-for s in range(1,q.len-1)
-ϴ=U(q[s],r)
-if M(@ϴ) then return ϴ
-if not ϴ then return ϴ
-end for
-end if
-return ϴ
-end if
-if ϭ=="or" then
-if q.len==1 then return Ч
-for s in range(1,q.len-1)
-ϴ=U(q[s],r)
-if M(@ϴ) then return ϴ
-if ϴ then return ϴ
-end for
-return 0
-end if
-if ϭ==и then
-return q[1]
-end if
-if ϭ==з then
-Ѓ=q[1]
-if Ѓ isa list and Ѓ.len>0 and Ѓ[0]==Щ then
-Ѓ=Ѓ[1:]
-end if
-ϼ=q[2]
-o=V(r)
-if Ѓ.len>0 then
-for s in range(0,Ѓ.len-1,2)
-d=U(Ѓ[s+1],o)
-if M(@d) then return d
-o.set(Ѓ[s],d)
-end for
-end if
-return U(ϼ,o)
-end if
-if ϭ==д then
-ϴ=Ч
-if q.len>1 then
-for s in range(1,q.len-1)
-ϴ=U(q[s],r)
-if M(@ϴ) then return ϴ
-end for
-end if
-return ϴ
-end if
-if ϭ==е then
-Є=U(q[1],r)
-if M(@Є) then return Є
-if @Є then
-return U(q[2],r)
-else
-if q.len>3 then return U(q[3],r)
-return Ч
-end if
-end if
-if ϭ=="ns" then
-Ѕ=q[1]
-if Ѕ isa list then Ѕ=q[1][1]
-І=Y.locals[б]
-if not І.hasIndex(Ѕ) then
-І[Ѕ]={}
-Y.locals[в][Ѕ]={}
-end if
-Y.locals[а]=Ѕ
-return Ѕ
-end if
-if ϭ==ж or ϭ=="define" then
-name=q[1]
-d=U(q[2],r)
-if M(@d) then return d
-Ї=Y.locals[а]
-Y.locals[б][Ї][name]=@d
-r.set(name,d)
-return d
-end if
-if ϭ==Я then
-params=q[1]
-if params isa list and params.len>0 and params[0]==Щ then
-params=params[1:]
-end if
-return {Т:Я,Ь:params,"body":q[2:],"env":r}
-end if
-l=U(ϭ,r)
-if M(@l) then return l
-m=[]
-if q.len>1 then
-for s in range(1,q.len-1)
-val=U(q[s],r)
-if M(@val) then return val
-m.push(@val)
-end for
-end if
-Н=Y.natives.hasIndex(ϭ)
-Ϻ=P(@l,@m,@ϭ,Н)
-if M(@Ϻ) then return N(@Ϻ," in "+ϭ)
-return Ϻ
-else if @q isa string then
-if q[0]==":" then return q
-if q[0]==Ц then return q[1:-1]
-if q.indexOf("/")!=Ч then
-Ј=q.split("/")
-if Ј.len==2 and Ј[0]!=м and Ј[1]!=м then
-Љ=Ј[0]
-Њ=Ј[1]
-Ї=Y.locals[а]
-Ћ=Y.locals[в][Ї]
-if Ћ.hasIndex(Љ) then
-Ќ=Ћ[Љ]
-else
-Ќ=Љ
-end if
-І=Y.locals[б]
-if not І.hasIndex(Ќ) then return K("No such namespace: "+Ќ)
-if not І[Ќ].hasIndex(Њ) then return K("No such var: "+q)
-return @І[Ќ][Њ]
-end if
-end if
-return r.get(@q)
-else
-return q
-end if
-end function
-V=function(Г)
-Д={}
-Д.locals={}
-Д.get=function(name)
-if self.locals.hasIndex(name) then return @self.locals[name]
-if Г!=Ч then return Г.get(name)
-return K("Undefined in the env: "+name)
-end function
-Д.set=function(name,d)
-self.locals[name]=@d
-end function
-Д.setExisting=function(name,d)
-if self.locals.hasIndex(name) then
-self.locals[name]=d
-return @d
-end if
-if Г!=Ч then return Г.setExisting(name,@d)
-return K("Cannot set! undefined variable: "+name)
-end function
-return Д
-end function
-W=function(ϻ,params,Ж)
-o=V(Ж)
-if ϻ.len==0 then
-if params.len>0 then
-return K("Wrong number of args: expected 0, got "+params.len)
-end if
-return o
-end if
-З=Ч
-for s in range(0,ϻ.len-1)
-if ϻ[s]=="&" then
-З=s
-break
-end if
-end for
-if З!=Ч then
-if params.len<З then
-return K("Wrong number of args: expected at least "+З+", got "+params.len)
-end if
-for s in range(0,З-1)
-o.set(ϻ[s],params[s])
-end for
-В=ϻ[З+1]
-if З>=params.len then
-o.set(В,[])
-else
-o.set(В,params[З:])
-end if
-else
-if params.len!=ϻ.len then
-return K("Wrong number of args: expected "+ϻ.len+", got "+params.len)
-end if
-for s in range(0,ϻ.len-1)
-o.set(ϻ[s],params[s])
-end for
-end if
-return o
-end function
-X={}
-Y=V(Ч)
-Y.locals["__recur_sentinel__"]={Т:Ы,Ь:Ч}
-Y.locals[к]=0
-Y.locals[Ъ]={}
-Y.locals[б]={г:{}}
-Y.locals[а]=г
-Y.locals[в]={г:{}}
-Y.natives={}
-a={"get_shell":@get_shell,"get_router":@get_router,"nslookup":@nslookup,"whois":@whois,"is_valid_ip":@is_valid_ip,"is_lan_ip":@is_lan_ip,"active_user":@active_user,"home_dir":@home_dir,"program_path":@program_path,"current_path":@current_path,"parent_path":@parent_path,"include_lib":@include_lib,"yield":@yield,"exit":@exit,"wait":@wait,"time":@time,"current_date":@current_date,"char":@char,"pi":@pi,"rnd":@rnd,"val":@val,"slice":@slice,"typeof":@typeof,"globals":@I,"format-columns":@format_columns}
-for b in a
-Y.locals[b.key]=@b.value
-Y.natives[b.key]=1
-end for
-Y.locals[д]=д
-Y.locals[е]=е
-Y.locals[ж]=ж
-Y.locals[Я]=Я
-Y.locals[з]=з
-Y.locals[и]=и
-Y.locals[й]=й
-Y.locals["gensym"]=function(m)
-И="G__"
-if m.len>0 then И=m[0]
-Й=Y.locals[к]+1
-Y.locals[к]=Й
-return И+Й
-end function
-Y.locals["+"]=function(m)
-sum=0
-if m.len==0 then return 0
-for s in range(0,m.len-1)
-sum=sum+m[s]
-end for
-return sum
-end function
-Y.locals["-"]=function(m)
-if m.len==0 then return K("- requires at least 1 argument")
-if m.len==1 then return -m[0]
-ϴ=m[0]
-if m.len>1 then
-for s in range(1,m.len-1)
-ϴ=ϴ-m[s]
-end for
-end if
-return ϴ
-end function
-Y.locals["*"]=function(m)
-К=1
-if m.len==0 then return 1
-for s in range(0,m.len-1)
-К=К*m[s]
-end for
-return К
-end function
-Y.locals["/"]=function(m)
-if m.len==0 then return K("/ requires at least 1 argument")
-if m.len==1 then
-if m[0]==0 then return K(л)
-return 1/m[0]
-end if
-ϴ=m[0]
-for s in range(1,m.len-1)
-if m[s]==0 then return K(л)
-ϴ=ϴ/m[s]
-end for
-return ϴ
-end function
-Y.locals["%"]=function(m)
-if m.len!=2 then return K("% requires exactly 2 arguments")
-if m[1]==0 then return K("Modulo by zero")
-return m[0]%m[1]
-end function
-Y.locals["mod"]=function(m)
-if m.len!=2 then return K("mod requires exactly 2 arguments")
-if m[1]==0 then return K("Modulo by zero")
-return m[0]%m[1]
-end function
-Y.locals["**"]=function(m)
-if m.len!=2 then return K("** requires exactly 2 arguments")
-return m[0]^m[1]
-end function
-Y.locals["quot"]=function(m)
-if m.len!=2 then return K("quot requires exactly 2 arguments")
-if m[1]==0 then return K(л)
-return floor(m[0]/m[1])
-end function
-Y.locals["="]=function(m)
-if m.len<2 then return K("= requires at least 2 arguments")
-for s in range(1,m.len-1)
-if m[s]!=m[0] then return 0
-end for
-return 1
-end function
-Y.locals["not="]=function(m)
-if m.len!=2 then return K("not= requires exactly 2 arguments")
-return m[0]!=m[1]
-end function
-Y.locals["<"]=function(m)
-if m.len<2 then return K("< requires at least 2 arguments")
-for s in range(1,m.len-1)
-if m[s-1]>=m[s] then return 0
-end for
-return 1
-end function
-Y.locals[">"]=function(m)
-if m.len<2 then return K("> requires at least 2 arguments")
-for s in range(1,m.len-1)
-if m[s-1]<=m[s] then return 0
-end for
-return 1
-end function
-Y.locals["<="]=function(m)
-if m.len<2 then return K("<= requires at least 2 arguments")
-for s in range(1,m.len-1)
-if m[s-1]>m[s] then return 0
-end for
-return 1
-end function
-Y.locals[">="]=function(m)
-if m.len<2 then return K(">= requires at least 2 arguments")
-for s in range(1,m.len-1)
-if m[s-1]<m[s] then return 0
-end for
-return 1
-end function
-Y.locals["not"]=function(m)
-if m.len!=1 then return K("not requires exactly 1 argument")
-return not m[0]
-end function
-Y.locals["list"]=function(m)
-if m==Ч then return K("Args for list is null!")
-return []+m
-end function
-Y.locals["car"]=function(m)
-if m.len!=1 then return K("car requires exactly 1 argument")
-Л=m[0]
-if Л==Ч or Л.len==0 then return K("car called on empty list")
-return Л[0]
-end function
-Y.locals["cdr"]=function(m)
-if m.len!=1 then return K("cdr requires exactly 1 argument")
-Л=m[0]
-if Л==Ч or Л.len==0 then return []
-if Л.len==1 then return []
-return Л[1:]
-end function
-Y.locals["cons"]=function(m)
-if m.len!=2 then return K("cons requires exactly 2 arguments")
-if m[1]==Ч then return [m[0]]
-return [m[0]]+m[1]
-end function
-Y.locals["first"]=function(m)
-if m.len!=1 then return K("first requires exactly 1 argument")
-Л=m[0]
-if Л==Ч or Л.len==0 then return Ч
-return Л[0]
-end function
-Y.locals["second"]=function(m)
-if m.len!=1 then return K("second requires exactly 1 argument")
-Л=m[0]
-if Л==Ч or Л.len<2 then return Ч
-return Л[1]
-end function
-Y.locals["rest"]=function(m)
-if m.len!=1 then return K("rest requires exactly 1 argument")
-Л=m[0]
-if Л==Ч or Л.len<=1 then return []
-return Л[1:]
-end function
-Y.locals["conj"]=function(m)
-if m.len<2 then return K("conj requires at least 2 arguments")
-ϴ=m[0]
-if ϴ==Ч then ϴ=[]
-if m.len>1 then
-for s in range(1,m.len-1)
-ϴ=ϴ+[m[s]]
-end for
-end if
-return ϴ
-end function
-Y.locals["concat"]=function(m)
-ϴ=[]
-if m.len==0 then return ϴ
-for s in range(0,m.len-1)
-if m[s]!=Ч then ϴ=ϴ+m[s]
-end for
-return ϴ
-end function
-Y.locals["empty?"]=function(m)
-if M(m) then return m
-if m.len!=1 then return K("empty? requires exactly 1 argument")
-Л=m[0]
-if Л==Ч then return 1
-return Л.len==0
-end function
-Y.locals["count"]=function(m)
-if m.len!=1 then return K("count requires exactly 1 argument")
-if m[0]==Ч then return 0
-return m[0].len
-end function
-Y.locals["list?"]=function(m)
-if m.len!=1 then return K("list? requires exactly 1 argument")
-return m[0] isa list
-end function
-Y.locals["nth"]=function(m)
-if m.len!=2 then return K("nth requires exactly 2 arguments")
-Л=m[0]
-М=m[1]
-if Л==Ч or М>=Л.len then return K("nth index out of bounds")
-return Л[М]
-end function
-Y.locals["get"]=function(m)
-if m.len<2 then return K("get requires at least 2 arguments")
-О=m[0]
-Ϩ=m[1]
-if О==Ч then return Ч
-if not О.hasIndex(Ϩ) then
-if m.len==3 then return m[2]
-return Ч
-end if
-return @О[Ϩ]
-end function
-Y.locals["hash-map"]=function(m)
-ϴ={}
-if m.len==0 then return ϴ
-if m.len%2!=0 then return K("hash-map requires even number of arguments")
-for s in range(0,m.len-1,2)
-ϴ[m[s]]=@m[s+1]
-end for
-return ϴ
-end function
-Y.locals["assoc"]=function(m)
-if m.len<3 then return K("assoc requires at least 3 arguments")
-ϴ={}
-if m[0]!=Ч then
-for b in m[0]
-ϴ[b.key]=@b.value
-end for
-end if
-if m.len>1 then
-for s in range(1,m.len-1,2)
-ϴ[m[s]]=@m[s+1]
-end for
-end if
-return ϴ
-end function
-Y.locals["dissoc"]=function(m)
-if m.len<2 then return K("dissoc requires at least 2 arguments")
-ϴ={}
-for b in m[0]
-ϴ[b.key]=@b.value
-end for
-if m.len>1 then
-for s in range(1,m.len-1)
-ϴ.remove(m[s])
-end for
-end if
-return ϴ
-end function
-Y.locals["keys"]=function(m)
-if m.len!=1 then return K("keys requires exactly 1 argument")
-if m[0]==Ч then return []
-ϴ=[]
-for b in m[0]
-ϴ.push(b.key)
-end for
-return ϴ
-end function
-Y.locals["vals"]=function(m)
-if m.len!=1 then return K("vals requires exactly 1 argument")
-if m[0]==Ч then return []
-ϴ=[]
-for b in m[0]
-ϴ.push(@b.value)
-end for
-return ϴ
-end function
-Y.locals["map?"]=function(m)
-if m.len!=1 then return K("map? requires exactly 1 argument")
-return m[0] isa map
-end function
-Y.locals["contains?"]=function(m)
-if m.len!=2 then return K("contains? requires exactly 2 arguments")
-if m[0]==Ч then return 0
-return m[0].hasIndex(m[1])
-end function
-Y.locals["number?"]=function(m)
-if m.len!=1 then return K("number? requires exactly 1 argument")
-return m[0] isa number
-end function
-Y.locals["string?"]=function(m)
-if m.len!=1 then return K("string? requires exactly 1 argument")
-return m[0] isa string
-end function
-Y.locals["null?"]=function(m)
-if m.len!=1 then return K("null? requires exactly 1 argument")
-return m[0]==Ч
-end function
-Y.locals["fn?"]=function(m)
-if m.len!=1 then return K("fn? requires exactly 1 argument")
-if m[0] isa funcRef then return 1
-return m[0] isa map and m[0].hasIndex(Т) and m[0][Т]==Я
-end function
-Y.locals["true?"]=function(m)
-if m.len!=1 then return K("true? requires exactly 1 argument")
-return m[0]==1
-end function
-Y.locals["false?"]=function(m)
-if m.len!=1 then return K("false? requires exactly 1 argument")
-return m[0]==0
-end function
-Y.locals["floor"]=function(m)
-if m.len!=1 then return K("floor requires exactly 1 argument")
-return floor(m[0])
-end function
-Y.locals["ceil"]=function(m)
-if m.len!=1 then return K("ceil requires exactly 1 argument")
-return ceil(m[0])
-end function
-Y.locals["round"]=function(m)
-if m.len!=1 then return K("round requires exactly 1 argument")
-return round(m[0])
-end function
-Y.locals["abs"]=function(m)
-if m.len!=1 then return K("abs requires exactly 1 argument")
-return abs(m[0])
-end function
-Y.locals["sqrt"]=function(m)
-if m.len!=1 then return K("sqrt requires exactly 1 argument")
-return sqrt(m[0])
-end function
-Y.locals["max"]=function(m)
-if m.len<1 then return K("max requires at least 1 argument")
-ϴ=m[0]
-if m.len>1 then
-for s in range(1,m.len-1)
-if m[s]>ϴ then ϴ=m[s]
-end for
-end if
-return ϴ
-end function
-Y.locals["min"]=function(m)
-if m.len<1 then return K("min requires at least 1 argument")
-ϴ=m[0]
-if m.len>1 then
-for s in range(1,m.len-1)
-if m[s]<ϴ then ϴ=m[s]
-end for
-end if
-return ϴ
-end function
-Y.locals["str"]=function(m)
-ϴ=м
-if m.len==0 then return ϴ
-for s in range(0,m.len-1)
-ϴ=ϴ+str(m[s])
-end for
-return ϴ
-end function
-Y.locals["split"]=function(m)
-if m.len!=2 then return K("split requires exactly 2 arguments")
-return m[0].split(m[1])
-end function
-Y.locals["join"]=function(m)
-if @m.len!=2 then return K("join requires exactly 2 arguments")
-if typeof(@m)!="list" then return K("Expected a list, got "+typeof(@m))
-return m[0].join(m[1])
-end function
-Y.locals["trim"]=function(m)
-if m.len!=1 then return K("trim requires exactly 1 argument")
-return m[0].trim
-end function
-Y.locals["index-of"]=function(m)
-if m.len!=2 then return K("index-of requires exactly 2 arguments")
-return m[0].indexOf(m[1])
-end function
-Y.locals["subs"]=function(m)
-if m.len<2 then return K("subs requires at least 2 arguments")
-if m.len==2 then return m[0][m[1]:]
-return m[0][m[1]:m[2]]
-end function
-Y.locals["upper-case"]=function(m)
-if m.len!=1 then return K("upper-case requires exactly 1 argument")
-return m[0].upper
-end function
-Y.locals["lower-case"]=function(m)
-if m.len!=1 then return K("lower-case requires exactly 1 argument")
-return m[0].lower
-end function
-Y.locals["replace"]=function(m)
-if m.len!=3 then return K("replace requires exactly 3 arguments")
-П=m[0]
-Р=m[1]
-С=m[2]
-if Р==м then return K("replace: needle cannot be empty")
-return П.replace(Р,С)
-end function
-Y.locals["println"]=function(m)
-if m.len==0 then
-print(м)
-return Ч
-end if
-Ј=[]
-for s in range(0,m.len-1)
-Ј.push(str(@m[s]))
-end for
-print(Ј.join(" "))
-return Ч
-end function
-Y.locals["user-input"]=function(m)
-if m.len>0 then return user_input(m[0])
-return user_input(м)
-end function
-Y.locals[н]=function(m)
-if m.len!=2 then return K("apply requires exactly 2 arguments")
-ϰ=@m[0]
-Ђ=m[1]
-if not Ђ isa list then return K("apply requires a list as second argument")
-return P(@ϰ,Ђ,н)
-end function
-Y.locals["take-keys"]=function(m)
-Ѓ=m[0]
-if Ѓ isa list and Ѓ.len>0 and Ѓ[0]==Щ then
-Ѓ=Ѓ[1:]
-end if
-ϴ=[]
-for s in range(0,Ѓ.len-1,2)
-ϴ.push(Ѓ[s])
-end for
-return ϴ
-end function
-Y.locals["take-vals"]=function(m)
-Ѓ=m[0]
-if Ѓ isa list and Ѓ.len>0 and Ѓ[0]==Щ then
-Ѓ=Ѓ[1:]
-end if
-ϴ=[]
-for s in range(1,Ѓ.len-1,2)
-ϴ.push(Ѓ[s])
-end for
-return ϴ
-end function
-Y.locals["true"]=1
-Y.locals["false"]=0
-Y.locals["null"]=Ч
-Y.locals["nil"]=Ч
-while 1
-Е=user_input("Clojette> ")
-if Е=="exit" or Е=="quit" or Е=="q" then break
-ϴ=U(T(Е),Y)
-if M(@ϴ) then
-print("ERROR: "+ϴ[Э])
-if ϴ.hasIndex(Х) and ϴ[Х].len>0 then
-for g in ϴ[Х]
-print(g)
-end for
-end if
-else
-print(ϴ)
-end if
-end while

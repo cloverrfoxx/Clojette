@@ -1,3 +1,18 @@
+# 1.1.2
+New release! Now with improved stability and reader macros!
+
+## Additions
+- made a discord! go join it! 
+- keyword map access. Basically (:x my-map) works now.
+- Guard() functionality. Guard() checks the arguments you give in stdlib. This should improve stability. It is also usable from the language, too!
+- refactored Clojette to be its own namespace, so that it doesn't pollute the globals.
+- added multiple native functions to the natives list, including get-custom-object and poll-input.
+
+## Bugfixes
+- Added a missing ) to the end of the stdlib (oops)
+- Fixed up the docs
+- many, many more bugfixes I cant be bothered to list...
+
 # 1.0.2
 WIP, not a full release, but I am throwing changes here as they come.
 
@@ -7,17 +22,9 @@ WIP, not a full release, but I am throwing changes here as they come.
 - Relicensed Clojette. Now you may link the library...
 - More reader macros! Now with `x#` (auto-gensym), `#()` (anonymous functions), and map definitions through {}.
 - Did I mention better map support? It was even mentioned in the docs before this behavior was in the language -.-
-- keyword map access. Basically (:x my-map) works now.
-- Guard() functionality. Guard() checks the arguments you give in stdlib. This should improve stability. It is also usable from the language, too!
-- refactored Clojette to be its own namespace, so that it doesn't pollute the globals.
-- made a discord! go join it! 
-- added multiple native functions to the natives list, including get-custom-object and poll-input.
-- TODO: Add other changes that get made!
 
 ## Bugfixes
-- Added a missing ) to the end of the stdlib (oops)
-- Fixed up the docs
-- and many more bugs I fixed...
+- many
 
 # 1.0.1
 Small update!
