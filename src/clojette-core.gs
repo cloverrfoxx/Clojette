@@ -277,8 +277,9 @@ readFromTokens = function(tokens)
       inner = readFromTokens(tokens)
       if isError(@inner) then return inner
       return ["unquote", inner]
-    else if token[token.len-1] == "#" then // Runtime gensym?
-      return ["gensym", token[0:token.len - 1]]
+    // TODO: Fix gensym because this is NOT working
+    //else if token[token.len-1] == "#" then // Runtime gensym?
+      //return ["gensym", token[0:token.len - 1]]
     // Return an atom, we can let the MiniScript type coercion do everything for us
     else 
   	return atom(token)
