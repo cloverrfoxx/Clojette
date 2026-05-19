@@ -369,6 +369,63 @@
 (assert-eq "get file" "file" (str (-> (get_shell) (.host_computer) (.File "/etc/passwd"))))
 
 ;; ============================================================
+;; Guard system
+;; ============================================================
+(run-section "Guard system")
+
+;; Valid call returns null (no error)
+(assert-null "guard valid types"
+  (guard "*" ["number"] [1 2 3]))
+
+;; Type mismatch should throw → caught
+(assert-true "guard type mismatch throws"
+  (try
+    (guard "*" ["number"] [1 "bad"])
+    (catch [e] true)))
+
+;; Arity mismatch should throw → caught
+(assert-true "guard arity mismatch throws"
+  (try
+    (guard "3" ["number" "number" "number"] [1 2])
+    (catch [e] true)))
+
+;; Variadic arity OK
+(assert-null "guard variadic arity ok"
+  (guard "*" ["number"] [1 2 3 4]))
+
+;; Default error includes function name
+(assert-eq "guard default error includes name"
+  true
+  (try
+    (guard "*" ["number"] [1 "x"] "myfn")
+    (catch [e]
+      (contains? e "myfn"))))
+
+;; Custom message overrides default
+(assert-eq "guard custom error message"
+  "bad input"
+  (try
+    (guard "*" ["number"] [1 "x"] "myfn" "bad input")
+    (catch [e] e)))
+
+;; Trailing type reuse works
+(assert-true "guard trailing type reuse"
+  (try
+    (guard "*" ["number" "string"] [1 "ok" 2 "ok2"])
+    (catch [e] true)))
+
+;; Quoted list inputs supported
+(assert-null "guard quoted list input"
+  (guard "*" '(number) '(1 2 3)))
+
+;; First failure stops execution
+(assert-eq "guard stops at first error"
+  true
+  (try
+    (guard "*" ["number"] ["bad" "also bad"])
+    (catch [e] true)))
+
+;; ============================================================
 ;; Results
 ;; ============================================================
 (println "")
