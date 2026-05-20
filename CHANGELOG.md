@@ -1,3 +1,12 @@
+# 1.1.3
+Non-full release.
+
+## Additions
+- Guard system tests
+
+## Bugfixes
+- Guard system would crash sometimes :c
+
 # 1.1.2
 New release! Now with improved stability and reader macros!
 

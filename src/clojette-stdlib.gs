@@ -153,6 +153,13 @@ clojette.globalEnv.locals["guard"] = function(args)
     return clojette.guard(types, values, arguments, name, msg)
 end function
 
+clojette.globalEnv.locals["real-type?"] = function(args)
+    err = clojette.guard("1", ["any"], args, "real-type?")
+    if clojette.isError(err) then return err
+
+    return clojette.realTypeof(args[0])
+end function
+
 // Arithmetic
 clojette.globalEnv.locals["+"] = function(args)
     err = clojette.guard("*", [["number", "string", "list", "map"]], args, "+")
@@ -170,7 +177,7 @@ clojette.globalEnv.locals["-"] = function(args)
     err = clojette.guard("1+", [["number", "string"]], args, "-")
     if clojette.isError(err) then return err
 
-    if args.len == 0 then return self.lispError("- requires at least 1 argument")
+    if args.len == 0 then return clojette.lispError("- requires at least 1 argument")
     if args.len == 1 then return -args[0]
     result = args[0]
     if args.len > 1 then
@@ -197,14 +204,14 @@ clojette.globalEnv.locals["/"] = function(args)
     err = clojette.guard("1+", [["number", "string", "list"]], args, "/")
     if clojette.isError(err) then return err
       
-    if args.len == 0 then return self.lispError("/ requires at least 1 argument")
+    if args.len == 0 then return clojette.lispError("/ requires at least 1 argument")
     if args.len == 1 then
-        if args[0] == 0 then return self.lispError("Division by zero")
+        if args[0] == 0 then return clojette.lispError("Division by zero")
         return 1 / args[0]
     end if
     result = args[0]
     for i in range(1, args.len-1)
-        if args[i] == 0 then return self.lispError("Division by zero")
+        if args[i] == 0 then return clojette.lispError("Division by zero")
         result = result / args[i]
     end for
     return result
@@ -214,7 +221,7 @@ clojette.globalEnv.locals["%"] = function(args)
     err = clojette.guard("2", ["number"], args, "%")
     if clojette.isError(err) then return err
 
-    if args[1] == 0 then return self.lispError("Modulo by zero")
+    if args[1] == 0 then return clojette.lispError("Modulo by zero")
     return args[0] % args[1]
 end function
 
@@ -222,7 +229,7 @@ clojette.globalEnv.locals["mod"] = function(args)
     err = clojette.guard("2", ["number"], args, "mod")
     if clojette.isError(err) then return err
 
-    if args[1] == 0 then return self.lispError("Modulo by zero")
+    if args[1] == 0 then return clojette.lispError("Modulo by zero")
     return args[0] % args[1]
 end function
 
@@ -236,8 +243,8 @@ clojette.globalEnv.locals["quot"] = function(args)
     err = clojette.guard("2", ["number"], args, "quot")
     if clojette.isError(err) then return err
 
-    if args.len != 2 then return self.lispError("quot requires exactly 2 arguments")
-    if args[1] == 0 then return self.lispError("Division by zero")
+    if args.len != 2 then return clojette.lispError("quot requires exactly 2 arguments")
+    if args[1] == 0 then return clojette.lispError("Division by zero")
     return floor(args[0] / args[1])
 end function
 
@@ -297,7 +304,7 @@ end function
 clojette.globalEnv.locals["not"] = function(args)
     err = clojette.guard("1", ["all"], args)
     if clojette.isError(err) then return err
-    if args.len != 1 then return self.lispError("not requires exactly 1 argument")
+    if args.len != 1 then return clojette.lispError("not requires exactly 1 argument")
     return not args[0]
 end function
 
@@ -313,7 +320,7 @@ clojette.globalEnv.locals["car"] = function(args)
     if clojette.isError(err) then return err
 
     lst = args[0]
-    if lst == null or lst.len == 0 then return self.lispError("car called on empty list")
+    if lst == null or lst.len == 0 then return clojette.lispError("car called on empty list")
     return lst[0]
 end function
 
@@ -410,7 +417,7 @@ clojette.globalEnv.locals["nth"] = function(args)
 
     lst = args[0]
     n = args[1]
-    if lst == null or n >= lst.len then return self.lispError("nth index out of bounds")
+    if lst == null or n >= lst.len then return clojette.lispError("nth index out of bounds")
     return lst[n]
 end function
 
@@ -435,7 +442,7 @@ clojette.globalEnv.locals["hash-map"] = function(args)
 
     result = {}
     if args.len == 0 then return result
-    if args.len % 2 != 0 then return self.lispError("hash-map requires even number of arguments")
+    if args.len % 2 != 0 then return clojette.lispError("hash-map requires even number of arguments")
     for i in range(0, args.len-1, 2)
         result[args[i]] = @args[i+1]
     end for
@@ -499,13 +506,13 @@ clojette.globalEnv.locals["map?"] = function(args)
     err = clojette.guard("1", ["all"], args, "map?")
     if clojette.isError(err) then return err
     
-    if args.len != 1 then return self.lispError("map? requires exactly 1 argument")
+    if args.len != 1 then return clojette.lispError("map? requires exactly 1 argument")
     return args[0] isa map
 end function
 
 clojette.globalEnv.locals["contains?"] = function(args)
     err = clojette.guard("2", [["map", "list", "string", "null"], "any"], args, "contains")
-    if args.len != 2 then return self.lispError("contains? requires exactly 2 arguments")
+    if args.len != 2 then return clojette.lispError("contains? requires exactly 2 arguments")
     if args[0] == null then return false
     return args[0].hasIndex(args[1])
 end function
@@ -636,7 +643,7 @@ end function
 clojette.globalEnv.locals["index-of"] = function(args)
     err = clojette.guard("2", ["string", "string"], args)
     if clojette.isError(err) then return err
-    if args.len != 2 then return self.lispError("index-of requires exactly 2 arguments")
+    if args.len != 2 then return clojette.lispError("index-of requires exactly 2 arguments")
     return args[0].indexOf(args[1])
 end function
 
@@ -665,7 +672,7 @@ clojette.globalEnv.locals["replace"] = function(args)
     haystack = args[0]
     needle = args[1]
     replacement = args[2]
-    if needle == "" then return self.lispError("replace: needle cannot be empty")
+    if needle == "" then return clojette.lispError("replace: needle cannot be empty")
     return haystack.replace(needle, replacement)
 end function
 

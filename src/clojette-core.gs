@@ -80,7 +80,7 @@ clojette.callFunction = function(op, args, name, isNative=false)
     end if
 
     // funcRef - either stdlib or native MiniScript
-    if @op isa funcRef or typeof(@op) == "function" then
+    if @op isa funcRef or typeof(@op) == "function" then // its a native
         if isNative then
             if args.len == 0 then return @op()
             if args.len == 1 then return @op(args[0])
@@ -252,10 +252,10 @@ clojette.readFromTokens = function(tokens)
       if tokens[0] == "(" then
         tokens.pull // consume (
         expr = self.readFromTokens(tokens)
-        if @isError(@expr) then return expr
+        if self.isError(@expr) then return expr
         if tokens[0] != ")" then return self.lispError("Expected ) after #(...)")
         tokens.pull  // consume )
-        return ["fn", expr] // Return anonymous function.
+        return ["fn", ["&", "args"] , expr] // Return anonymous function.
       end if
       // In the future, if I need other # forms, they are added here.
 
@@ -453,7 +453,8 @@ clojette.eval = function(exp, env)
         		end if
         		catchEnv = self.makeEnv(env)
         		if catchBindings.len > 0 then
-        		    catchEnv.set(catchBindings[0], result["message"])
+                if result.hasIndex("trace") then catchEnv.set(catchBindings[0], {":message": result["message"], ":trace": result["trace"]}) 
+        		    else catchEnv.set(catchBindings[0], {":message": result["message"]})
         		end if
         		return self.eval(catchClause[2], catchEnv)
     		end if
@@ -573,15 +574,7 @@ clojette.eval = function(exp, env)
     	return {"classID": "fn", "args": params, "body": exp[2:], "env": env}
 		end if
 
-    // Handle syntax for (:x map), basically looks up stuff from maps using keywords.
-    // Very Clojure-esque.
-    if first[0] == ":" and @exp[1] isa map then
-      if self.isError(@exp[1]) then return @exp[1] // Check if 2nd element is an error, and return early... Is this more efficient? No clue.
-      if exp[1].hasIndex(first) then return exp[1][first] 
-      // Map doesnt have index for :x, so we perform a lookup for x
-      if exp[1].hasIndex(first[1:]) then return exp[1][first[1:]]
-      return self.lispError("Key " + first + " not found from map " + @exp[1])
-    end if
+
         
 		// normal function call
 		op = self.eval(first, env)
@@ -594,6 +587,17 @@ clojette.eval = function(exp, env)
         args.push(@val)
     	end for
 		end if
+
+    // Handle syntax for (:x map), basically looks up stuff from maps using keywords.
+    // Very Clojure-esque.
+    if first[0] == ":" and args[0] isa map then
+      if self.isError(args[0]) then return args[0] // Check if 2nd element is an error, and return early... Is this more efficient? No clue.
+      if args[0].hasIndex(first) then return args[0][first] 
+      // Map doesnt have index for :x, so we perform a lookup for x
+      if args[0].hasIndex(first[1:]) then return args[0][first[1:]]
+      return self.lispError("Key " + first + " not found from map " + args[0])
+    end if
+
 		isNative = self.globalEnv.natives.hasIndex(first)
     res = self.callFunction(@op, @args, @first, isNative)
     if self.isError(@res) then return self.addTrace(@res, " in " + first)

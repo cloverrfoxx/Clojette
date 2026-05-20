@@ -44,13 +44,6 @@
 (defn run-section [name]
   (println (str "\n-- " name " --")))
 
-(run-section "Variadics")
-(println "test 1")
-(defn my-list [& args] args)
-(println "test 2")
-(assert-eq "variadic" [1 2 3] (my-list 1 2 3))
-(println "test 3")
-
 ;; ============================================================
 ;; Arithmetic
 ;; ============================================================
@@ -92,6 +85,8 @@
 (assert-false "not true"   (not true))
 (assert-eq "and short-circuit" 3  (and 1 2 3))
 (assert-eq "or short-circuit"  3  (or false false 3))
+(assert-eq "and no args" true (and))
+(assert-null "or no args" (or))
 
 ;; ============================================================
 ;; Variables and binding
@@ -119,6 +114,13 @@
 (defn make-adder [n] (fn [x] (+ x n)))
 (def add5 (make-adder 5))
 (assert-eq "higher order"  11  (add5 6))
+(assert-eq "reader anon fn"
+  9
+  (#(* % %) 3))
+(assert-true "too few args"
+  (try
+    (add 1)
+    (catch [e] true)))
 
 ;; ============================================================
 ;; Variadics
@@ -186,6 +188,13 @@
 (assert-eq "identity"      42            (identity 42))
 (assert-eq "constantly"    7             ((constantly 7) 1 2 3))
 (assert-eq "complement"    false         ((complement even?) 2))
+(assert-eq "apply user fn"
+  5
+  (apply add [2 3]))
+(assert-true "apply non-list"
+  (try
+    (apply + 123)
+    (catch [e] true)))
 
 ;; ============================================================
 ;; Recursion and loop/recur
@@ -226,6 +235,15 @@
 (assert-false "dissoc"               (contains? (dissoc m "a") "a"))
 (assert-true  "map? true"            (map? m))
 (assert-false "map? false"           (map? [1 2 3]))
+(assert-eq "keyword lookup"
+  1
+  (:a {:a 1}))
+(assert-eq "keyword lookup 2"
+  1
+  (:a {a 1}))
+(assert-eq "nested literals"
+  {"a" [1 2]}
+  {"a" [1 2]})
 
 ;; ============================================================
 ;; String operations
@@ -299,6 +317,14 @@
 (assert-eq "swap! p" 2 p)
 (assert-eq "swap! q" 1 q)
 
+(assert-eq "unquote"
+  [1 2 3]
+  `(1 ~(+ 1 1) 3))
+
+(assert-eq "splice-unquote"
+  [1 2 3 4]
+  `(1 ~@[2 3] 4))
+
 ;; ============================================================
 ;; Threading macros
 ;; ============================================================
@@ -323,6 +349,13 @@
   (try
     (try (throw "inner") (catch [e] e))
     (catch [e] "outer")))
+(defn explode [] (throw "boom"))
+(defn wrapper [] (explode))
+(assert-true "error trace exists"
+  (try
+    (wrapper)
+    (catch [e]
+      (contains? (:trace e) "wrapper"))))
 
 ;; ============================================================
 ;; do and sequencing
@@ -424,6 +457,225 @@
   (try
     (guard "*" ["number"] ["bad" "also bad"])
     (catch [e] true)))
+
+
+;; ============================================================
+;; Quasiquote / unquote / splice
+;; ============================================================
+(run-section "Quasiquote")
+
+(assert-eq "quasiquote atom"
+42
+`42)
+
+(assert-eq "quasiquote simple list"
+'(1 2 3)
+`(1 2 3))
+
+(assert-eq "unquote expression"
+'(1 3 3)
+`(1 ~(+ 1 2) 3))
+
+(assert-eq "splice-unquote"
+'(1 2 3 4)
+`(1 ~@(list 2 3) 4))
+
+(assert-eq "nested quasiquote"
+'(a (b 3))
+`(a (b ~(+ 1 2))))
+
+(assert-true "splice-unquote non-list throws"
+(try
+`(1 ~@123 4)
+(catch [e] true)))
+
+;; ============================================================
+;; apply edge cases
+;; ============================================================
+(run-section "apply edge cases")
+
+(assert-eq "apply user fn"
+7
+(apply add '(3 4)))
+
+(assert-eq "apply variadic"
+'(1 2 3)
+(apply my-list '(1 2 3)))
+
+(assert-eq "apply empty"
+0
+(apply + '()))
+
+(assert-true "apply non-list throws"
+(try
+(apply + 123)
+(catch [e] true)))
+
+;; ============================================================
+;; and/or semantics
+;; ============================================================
+(run-section "and/or semantics")
+
+(assert-eq "and identity"
+true
+(and))
+
+(assert-null "or identity"
+(or))
+
+(assert-eq "and returns last truthy"
+99
+(and true 1 99))
+
+(assert-eq "or returns first truthy"
+77
+(or false null 77 88))
+
+(def sidefx 0)
+
+(and false (set! sidefx 123))
+(assert-eq "and short-circuit side effects"
+0
+sidefx)
+
+(or true (set! sidefx 456))
+(assert-eq "or short-circuit side effects"
+0
+sidefx)
+
+;; ============================================================
+;; Keyword lookup syntax
+;; ============================================================
+(run-section "Keyword lookup")
+
+(def km {:a 1 :b 2})
+
+(assert-eq "keyword lookup exact"
+1
+(:a km))
+
+(assert-eq "keyword lookup string fallback"
+123
+(:x {"x" 123}))
+
+(assert-true "keyword missing throws"
+(try
+(:zzz km)
+(catch [e] true)))
+
+;; ============================================================
+;; Function arity
+;; ============================================================
+(run-section "Function arity")
+
+(assert-true "too few args"
+(try
+(+ 1)
+(catch [e] true)))
+
+(assert-true "too many args"
+(try
+(% 1 2 3)
+(catch [e] true)))
+
+(assert-eq "variadic zero args"
+"Can't bind args for [] due to there being nothing in [\"&\", \"args\"]"
+(try (my-list) (catch [e] (:message e))))
+
+(assert-eq "variadic one arg"
+'(1)
+(my-list 1))
+
+;; ============================================================
+;; recur edge cases
+;; ============================================================
+(run-section "recur edge cases")
+
+(assert-eq "recur outside loop throws"
+  "recur"
+(try
+(recur 1)
+(catch [e] true)))
+
+(assert-true "recur arity mismatch"
+(try
+(loop [x 1 y 2]
+(recur 1))
+(catch [e] true)))
+
+;; ============================================================
+;; Error propagation
+;; ============================================================
+(run-section "Error propagation")
+
+(defn explode []
+(throw "boom"))
+
+(defn wrapper []
+(explode))
+
+(assert-eq "simple throw message"
+"boom"
+(try
+(explode)
+(catch [e] (:message e))))
+
+(assert-eq "nested throw propagation"
+"boom"
+(try
+(wrapper)
+(catch [e] (:message e) )))
+
+;; ============================================================
+;; Macro edge cases
+;; ============================================================
+(run-section "Macro edge cases")
+
+(defmacro unless2 [G__cond & G__body]
+`(if ~G__cond
+null
+(do ~@G__body)))
+
+(assert-eq "variadic macro"
+42
+(unless2 false
+1
+2
+42))
+
+(defmacro identity-macro [G__x1]
+G__x1)
+
+(assert-eq "macro returns atom"
+123
+(identity-macro 123))
+
+;; ============================================================
+;; Nested literal structures
+;; ============================================================
+(run-section "Nested literals")
+
+(assert-eq "nested vectors"
+'((1 2) (3 4))
+'([1 2] [3 4]))
+
+(assert-eq "nested maps"
+{"a" {"b" 2}}
+{"a" {"b" 2}})
+
+(assert-eq "mixed nested structures"
+{"nums" [1 2 3]}
+{"nums" [1 2 3]})
+
+;; ============================================================
+;; set! failure cases
+;; ============================================================
+(run-section "set! failures")
+
+(assert-true "set! undefined var"
+(try
+(set! DOES_NOT_EXIST 123)
+(catch [e] true)))
 
 ;; ============================================================
 ;; Results

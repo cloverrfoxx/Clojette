@@ -171,6 +171,16 @@ Maps are hash maps created with `hash-map` or `{}` syntax (via `assoc`).
 ;; -> {:x 1, :y 2}
 ```
 
+### Checking types
+You can check the type of an object by using the predicate `real-type?`. It returns the real type of an object. 
+
+```clojure
+(def x 10)
+
+(real-type? x)
+; -> "number"
+```
+
 ---
 
 ## Special Forms
@@ -244,7 +254,7 @@ Evaluates `condition`. If truthy, evaluates and returns `then-expr`. Otherwise e
 
 ### `quote`
 
-`quote` prevents a form from being evaluated. It returns the form as-is — as data.
+`quote` prevents a form from being evaluated. It returns the form as-is, as data.
 
 ```clojure
 (quote (1 2 3))   ;; -> [1 2 3] (a list, not a function call)
@@ -253,7 +263,7 @@ Evaluates `condition`. If truthy, evaluates and returns `then-expr`. Otherwise e
 ```
 
 #### Why might someone want this?
-Normally, when you write (+ 1 2), Clojette evaluates it — it calls + with 1 and 2 and returns 3. But sometimes you want the list itself, not its result. Quoting is how you say "treat this as data, don't evaluate it."
+Normally, when you write (+ 1 2), Clojette evaluates it. It calls + with 1 and 2 and returns 3. But sometimes you want the list itself, not its result. Quoting is how you say "treat this as data, don't evaluate it."
 This becomes important in two situations: creating literal lists of data, and writing macros (where you build up code as data before it runs). For everyday programming, you'll mostly use [...] vector syntax for data literals and won't need quote directly. When you start writing macros, it becomes essential.
 
 The reason for `quote`'s existance is quite simple. Internally, `[...]` expands to `(array ...)` which we don't want when making a macro. `quote` gives you the list as-is, and lets you modify it as you want. In short, `quote` exists mainly for macros.
@@ -515,7 +525,7 @@ Quasiquoted forms are templates that you can fill. `~` fills a spot in the templ
 (defmacro my-when [condition body]
   (list 'if condition body null))
 
-;; With quasiquote — much cleaner:
+;; With quasiquote. Much cleaner:
 (defmacro my-when [condition body]
   `(if ~condition ~body null))
 ```

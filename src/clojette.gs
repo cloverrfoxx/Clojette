@@ -27,8 +27,8 @@ __runtimeTag__ = function
 end function
 
 clojette.lispError = function(msg)
-  if msg == null then return {"classID": "error", "__tag__": @__runtimeTag__, "message": "Null"}
-  return {"classID": "error", "__tag__": @__runtimeTag__, "message": msg}
+  if msg == null then return {"classID": "error", "__tag__": @__runtimeTag__, "message": "Null", "trace": []}
+  return {"classID": "error", "__tag__": @__runtimeTag__, "message": msg, "trace": []}
 end function
 
 import_code("/home/<user>/clojette-dev/clojette-env.src")     // sets up globalEnv + natives = {}

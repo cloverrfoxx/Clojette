@@ -104,6 +104,11 @@
       remaining
       (recur (cdr remaining) (- i 1)))))
 
+(defn first [xs]
+  (if (empty? xs)
+    null
+    (car xs)))
+
 ;; Math utils
 (defn even? [n] (= (% n 2) 0))
 (defn odd? [n] (not (even? n)))
@@ -112,6 +117,13 @@
 (defn neg? [n] (< n 0))
 (defn inc [n] (+ n 1))
 (defn dec [n] (- n 1))
+
+(defn max [x & xs]
+  (reduce
+    (fn [a b]
+      (if (> a b) a b))
+    x
+    xs))
 
 ;; Function utils
 (defn identity [x] x)
