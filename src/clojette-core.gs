@@ -52,6 +52,12 @@ clojette.isRuntimeObject = function(val)
     return @val["__tag__"] == @__runtimeTag__
 end function
 
+clojette.gensym = function(prefix="G__")
+    counter = self.globalEnv.locals["__gensym_counter__"] + 1
+    self.globalEnv.locals["__gensym_counter__"] = counter
+    return prefix + str(counter)
+end function
+
 // There was an error here, where we were trying to check if op was a funcRef
 // that check was not dereferenced and we called it directly -_-
 // Lesson learned, always deref your functions
@@ -97,7 +103,17 @@ clojette.callFunction = function(op, args, name, isNative=false)
     return self.lispError("Not a function: " + name)
 end function
 
-clojette.evalQuasiquote = function(exp, env)
+clojette.evalQuasiquote = function(exp, env, gensyms=null)
+    if gensyms == null then gensyms = {}
+
+    if exp isa string and exp.len > 0 and exp[0] != """" and exp[exp.len-1] == "#" then
+      if not gensyms.hasIndex(exp) then
+        gensyms[exp] = self.gensym(exp[0:exp.len-1] + "__")
+      end if
+    
+      return gensyms[exp]
+    end if
+
     // not a list, just return it as-is (like quote)
     if not @exp isa list then return exp
     // empty list
@@ -112,6 +128,7 @@ clojette.evalQuasiquote = function(exp, env)
     
     // walk the list, handling splice-unquote
     result = []
+    // we dont need to check bounds because it returns earlier if it is not
     for i in range(0, exp.len-1)
         item = exp[i]
         if item isa list and item.len > 0 and item[0] == "splice-unquote" then
@@ -124,7 +141,7 @@ clojette.evalQuasiquote = function(exp, env)
               end for
             end if
         else
-    	    item = self.evalQuasiquote(@item, env)
+    	    item = self.evalQuasiquote(@item, env, gensyms)
     		  if self.isError(@item) then return item
     		  result.push(@item)
         end if
@@ -255,7 +272,7 @@ clojette.readFromTokens = function(tokens)
         if self.isError(@expr) then return expr
         if tokens[0] != ")" then return self.lispError("Expected ) after #(...)")
         tokens.pull  // consume )
-        return ["fn", ["&", "args"] , expr] // Return anonymous function.
+        return ["fn", ["array", "&", "args"] , expr] // Return anonymous function.
       end if
       // In the future, if I need other # forms, they are added here.
 
@@ -325,7 +342,7 @@ clojette.eval = function(exp, env)
 
     		args = []
     		if exp.len > 2 then
-        	for i in range(2, exp.len-1)
+        	for i in range(2, exp.len-1) // bounds checked!
           result = self.eval(exp[i], env)
           if self.isError(@result) then return @result
             args.push(@result)
@@ -345,7 +362,7 @@ clojette.eval = function(exp, env)
     if first == "array" then
     		result = []
     		if exp.len > 1 then
-        		for i in range(1, exp.len-1)
+        		for i in range(1, exp.len-1) // bounds are checked
             		val = self.eval(exp[i], env)
             		if self.isError(@val) then return val
             		result.push(val)
@@ -404,7 +421,7 @@ clojette.eval = function(exp, env)
     			__closedEnv = closedEnv
     			newEnv = self.makeEnv(__closedEnv)
     			if __argNames.len > 0 and forms.len > 0 then
-        			for i in range(0, __argNames.len-1)
+        			for i in range(0, __argNames.len-1) // bounds are checkd
             			if __argNames[i] == "&" then
                 			restName = __argNames[i+1]
                 			if i >= forms.len then
@@ -431,7 +448,7 @@ clojette.eval = function(exp, env)
 		if first == "recur" then
     		args = []
     		if exp.len > 1 then
-        		for i in range(1, exp.len-1)
+        		for i in range(1, exp.len-1) // bounds are checked!
         			result = self.eval(exp[i], env)
        				if self.isError(result) then return result
         			args.push(result)
@@ -453,8 +470,8 @@ clojette.eval = function(exp, env)
         		end if
         		catchEnv = self.makeEnv(env)
         		if catchBindings.len > 0 then
-                if result.hasIndex("trace") then catchEnv.set(catchBindings[0], {":message": result["message"], ":trace": result["trace"]}) 
-        		    else catchEnv.set(catchBindings[0], {":message": result["message"]})
+                if result.hasIndex("trace") then catchEnv.set(catchBindings[0], {"message": result["message"], "trace": result["trace"]}) 
+        		    else catchEnv.set(catchBindings[0], {"message": result["message"], "trace": []})
         		end if
         		return self.eval(catchClause[2], catchEnv)
     		end if
@@ -464,7 +481,13 @@ clojette.eval = function(exp, env)
 		if first == "throw" then
     		msg = self.eval(exp[1], env)
     		if self.isError(msg) then return msg
-    		return self.lispError(msg)
+        trace = null
+        if exp.len >= 3 then 
+          trace = self.eval(exp[2], env)
+          if self.isError(trace) then return trace
+        end if
+        if msg isa map then return self.lispError(msg["message"], msg["trace"])
+    		return self.lispError(msg, trace)
 		end if
 	
 		if first == "apply" then
@@ -482,7 +505,7 @@ clojette.eval = function(exp, env)
 		if first == "and" then
     		result = true
 			  if exp.len > 1 then
-    			for i in range(1, exp.len-1)
+    			for i in range(1, exp.len-1) // bounds are checked
         		result = self.eval(exp[i], env)
 					if self.isError(@result) then return result
 					if not result then return result
@@ -501,9 +524,9 @@ clojette.eval = function(exp, env)
     		return false
 		end if
 
-        if first == "quote" then
-            return exp[1]
-        end if
+    if first == "quote" then
+        return exp[1]
+    end if
 
 		if first == "let" then
     		bindings = exp[1]
@@ -573,8 +596,6 @@ clojette.eval = function(exp, env)
     	end if
     	return {"classID": "fn", "args": params, "body": exp[2:], "env": env}
 		end if
-
-
         
 		// normal function call
 		op = self.eval(first, env)

@@ -27,8 +27,8 @@ __runtimeTag__ = function
 end function
 
 clojette.lispError = function(msg)
-  if msg == null then return {"classID": "error", "__tag__": @__runtimeTag__, "message": "Null"}
-  return {"classID": "error", "__tag__": @__runtimeTag__, "message": msg}
+  if msg == null then return {"classID": "error", "__tag__": @__runtimeTag__, "message": "Null", "trace": []}
+  return {"classID": "error", "__tag__": @__runtimeTag__, "message": msg, "trace": []}
 end function
 
 // Environment setup, very cool.
@@ -80,6 +80,7 @@ clojette.bindArgs = function(argNames, params, baseEnv)
             return self.lispError("Wrong number of args: expected at least " + restIdx + ", got " + params.len)
         end if
         for i in range(0, restIdx-1)
+            if params.len-1 == -1 then return self.lispError("Can't bind args for " + params + " due to there being nothing in " + argNames)
             newEnv.set(argNames[i], params[i])
         end for
         restName = argNames[restIdx+1]
@@ -192,7 +193,6 @@ clojette.matchesType = function(expected, actual)
     end if
 
     if expected == "all" then return true
-
     return expected == actual
 end function
 
@@ -244,10 +244,17 @@ clojette.globalEnv.locals["guard"] = function(args)
     arguments = args[2]
     name = null
     msg = null
-    if args.len >= 3 then name = args[3] 
-    if args.len >= 4 then msg = args[4] 
+    if args.len > 3 then name = args[3] 
+    if args.len > 4 then msg = args[4] 
 
     return clojette.guard(types, values, arguments, name, msg)
+end function
+
+clojette.globalEnv.locals["real-type?"] = function(args)
+    err = clojette.guard("1", ["any"], args, "real-type?")
+    if clojette.isError(err) then return err
+
+    return clojette.realTypeof(args[0])
 end function
 
 // Arithmetic
@@ -267,7 +274,7 @@ clojette.globalEnv.locals["-"] = function(args)
     err = clojette.guard("1+", [["number", "string"]], args, "-")
     if clojette.isError(err) then return err
 
-    if args.len == 0 then return self.lispError("- requires at least 1 argument")
+    if args.len == 0 then return clojette.lispError("- requires at least 1 argument")
     if args.len == 1 then return -args[0]
     result = args[0]
     if args.len > 1 then
@@ -294,14 +301,14 @@ clojette.globalEnv.locals["/"] = function(args)
     err = clojette.guard("1+", [["number", "string", "list"]], args, "/")
     if clojette.isError(err) then return err
       
-    if args.len == 0 then return self.lispError("/ requires at least 1 argument")
+    if args.len == 0 then return clojette.lispError("/ requires at least 1 argument")
     if args.len == 1 then
-        if args[0] == 0 then return self.lispError("Division by zero")
+        if args[0] == 0 then return clojette.lispError("Division by zero")
         return 1 / args[0]
     end if
     result = args[0]
     for i in range(1, args.len-1)
-        if args[i] == 0 then return self.lispError("Division by zero")
+        if args[i] == 0 then return clojette.lispError("Division by zero")
         result = result / args[i]
     end for
     return result
@@ -311,7 +318,7 @@ clojette.globalEnv.locals["%"] = function(args)
     err = clojette.guard("2", ["number"], args, "%")
     if clojette.isError(err) then return err
 
-    if args[1] == 0 then return self.lispError("Modulo by zero")
+    if args[1] == 0 then return clojette.lispError("Modulo by zero")
     return args[0] % args[1]
 end function
 
@@ -319,7 +326,7 @@ clojette.globalEnv.locals["mod"] = function(args)
     err = clojette.guard("2", ["number"], args, "mod")
     if clojette.isError(err) then return err
 
-    if args[1] == 0 then return self.lispError("Modulo by zero")
+    if args[1] == 0 then return clojette.lispError("Modulo by zero")
     return args[0] % args[1]
 end function
 
@@ -333,8 +340,8 @@ clojette.globalEnv.locals["quot"] = function(args)
     err = clojette.guard("2", ["number"], args, "quot")
     if clojette.isError(err) then return err
 
-    if args.len != 2 then return self.lispError("quot requires exactly 2 arguments")
-    if args[1] == 0 then return self.lispError("Division by zero")
+    if args.len != 2 then return clojette.lispError("quot requires exactly 2 arguments")
+    if args[1] == 0 then return clojette.lispError("Division by zero")
     return floor(args[0] / args[1])
 end function
 
@@ -365,7 +372,7 @@ clojette.globalEnv.locals["<"] = function(args)
 end function
 
 clojette.globalEnv.locals[">"] = function(args)
-    err = clojette.guard("2+", ["any"], args)
+    err = clojette.guard("2+", ["all"], args)
     if clojette.isError(err) then return err
     for i in range(1, args.len-1)
         if args[i-1] <= args[i] then return false
@@ -394,7 +401,7 @@ end function
 clojette.globalEnv.locals["not"] = function(args)
     err = clojette.guard("1", ["all"], args)
     if clojette.isError(err) then return err
-    if args.len != 1 then return self.lispError("not requires exactly 1 argument")
+    if args.len != 1 then return clojette.lispError("not requires exactly 1 argument")
     return not args[0]
 end function
 
@@ -410,7 +417,7 @@ clojette.globalEnv.locals["car"] = function(args)
     if clojette.isError(err) then return err
 
     lst = args[0]
-    if lst == null or lst.len == 0 then return self.lispError("car called on empty list")
+    if lst == null or lst.len == 0 then return clojette.lispError("car called on empty list")
     return lst[0]
 end function
 
@@ -507,7 +514,7 @@ clojette.globalEnv.locals["nth"] = function(args)
 
     lst = args[0]
     n = args[1]
-    if lst == null or n >= lst.len then return self.lispError("nth index out of bounds")
+    if lst == null or n >= lst.len then return clojette.lispError("nth index out of bounds")
     return lst[n]
 end function
 
@@ -532,7 +539,7 @@ clojette.globalEnv.locals["hash-map"] = function(args)
 
     result = {}
     if args.len == 0 then return result
-    if args.len % 2 != 0 then return self.lispError("hash-map requires even number of arguments")
+    if args.len % 2 != 0 then return clojette.lispError("hash-map requires even number of arguments")
     for i in range(0, args.len-1, 2)
         result[args[i]] = @args[i+1]
     end for
@@ -596,13 +603,13 @@ clojette.globalEnv.locals["map?"] = function(args)
     err = clojette.guard("1", ["all"], args, "map?")
     if clojette.isError(err) then return err
     
-    if args.len != 1 then return self.lispError("map? requires exactly 1 argument")
+    if args.len != 1 then return clojette.lispError("map? requires exactly 1 argument")
     return args[0] isa map
 end function
 
 clojette.globalEnv.locals["contains?"] = function(args)
     err = clojette.guard("2", [["map", "list", "string", "null"], "any"], args, "contains")
-    if args.len != 2 then return self.lispError("contains? requires exactly 2 arguments")
+    if args.len != 2 then return clojette.lispError("contains? requires exactly 2 arguments")
     if args[0] == null then return false
     return args[0].hasIndex(args[1])
 end function
@@ -733,7 +740,7 @@ end function
 clojette.globalEnv.locals["index-of"] = function(args)
     err = clojette.guard("2", ["string", "string"], args)
     if clojette.isError(err) then return err
-    if args.len != 2 then return self.lispError("index-of requires exactly 2 arguments")
+    if args.len != 2 then return clojette.lispError("index-of requires exactly 2 arguments")
     return args[0].indexOf(args[1])
 end function
 
@@ -762,7 +769,7 @@ clojette.globalEnv.locals["replace"] = function(args)
     haystack = args[0]
     needle = args[1]
     replacement = args[2]
-    if needle == "" then return self.lispError("replace: needle cannot be empty")
+    if needle == "" then return clojette.lispError("replace: needle cannot be empty")
     return haystack.replace(needle, replacement)
 end function
 
@@ -865,6 +872,12 @@ clojette.isRuntimeObject = function(val)
     return @val["__tag__"] == @__runtimeTag__
 end function
 
+clojette.gensym = function(prefix="G__")
+    counter = self.globalEnv.locals["__gensym_counter__"] + 1
+    self.globalEnv.locals["__gensym_counter__"] = counter
+    return prefix + str(counter)
+end function
+
 // There was an error here, where we were trying to check if op was a funcRef
 // that check was not dereferenced and we called it directly -_-
 // Lesson learned, always deref your functions
@@ -893,7 +906,7 @@ clojette.callFunction = function(op, args, name, isNative=false)
     end if
 
     // funcRef - either stdlib or native MiniScript
-    if @op isa funcRef or typeof(@op) == "function" then
+    if @op isa funcRef or typeof(@op) == "function" then // its a native
         if isNative then
             if args.len == 0 then return @op()
             if args.len == 1 then return @op(args[0])
@@ -910,7 +923,17 @@ clojette.callFunction = function(op, args, name, isNative=false)
     return self.lispError("Not a function: " + name)
 end function
 
-clojette.evalQuasiquote = function(exp, env)
+clojette.evalQuasiquote = function(exp, env, gensyms=null)
+    if gensyms == null then gensyms = {}
+
+    if exp isa string and exp.len > 0 and exp[0] != """" and exp[exp.len-1] == "#" then
+      if not gensyms.hasIndex(exp) then
+        gensyms[exp] = self.gensym(exp[0:exp.len-1] + "__")
+      end if
+    
+      return gensyms[exp]
+    end if
+
     // not a list, just return it as-is (like quote)
     if not @exp isa list then return exp
     // empty list
@@ -925,6 +948,7 @@ clojette.evalQuasiquote = function(exp, env)
     
     // walk the list, handling splice-unquote
     result = []
+    // we dont need to check bounds because it returns earlier if it is not
     for i in range(0, exp.len-1)
         item = exp[i]
         if item isa list and item.len > 0 and item[0] == "splice-unquote" then
@@ -937,7 +961,7 @@ clojette.evalQuasiquote = function(exp, env)
               end for
             end if
         else
-    	    item = self.evalQuasiquote(@item, env)
+    	    item = self.evalQuasiquote(@item, env, gensyms)
     		  if self.isError(@item) then return item
     		  result.push(@item)
         end if
@@ -1065,10 +1089,10 @@ clojette.readFromTokens = function(tokens)
       if tokens[0] == "(" then
         tokens.pull // consume (
         expr = self.readFromTokens(tokens)
-        if @isError(@expr) then return expr
+        if self.isError(@expr) then return expr
         if tokens[0] != ")" then return self.lispError("Expected ) after #(...)")
         tokens.pull  // consume )
-        return ["fn", expr] // Return anonymous function.
+        return ["fn", ["&", "args"] , expr] // Return anonymous function.
       end if
       // In the future, if I need other # forms, they are added here.
 
@@ -1266,7 +1290,8 @@ clojette.eval = function(exp, env)
         		end if
         		catchEnv = self.makeEnv(env)
         		if catchBindings.len > 0 then
-        		    catchEnv.set(catchBindings[0], result["message"])
+                if result.hasIndex("trace") then catchEnv.set(catchBindings[0], {":message": result["message"], ":trace": result["trace"]}) 
+        		    else catchEnv.set(catchBindings[0], {":message": result["message"]})
         		end if
         		return self.eval(catchClause[2], catchEnv)
     		end if
@@ -1379,22 +1404,14 @@ clojette.eval = function(exp, env)
 		end if
 
 		if first == "fn" then
-      params = exp[1]
-      if params isa list and params.len > 0 and params[0] == "array" then
+    	params = exp[1]
+    	if params isa list and params.len > 0 and params[0] == "array" then
       		params = params[1:]
     	end if
     	return {"classID": "fn", "args": params, "body": exp[2:], "env": env}
 		end if
 
-    // Handle syntax for (:x map), basically looks up stuff from maps using keywords.
-    // Very Clojure-esque.
-    if first[0] == ":" and @exp[1] isa map then
-      if self.isError(@exp[1]) then return @exp[1] // Check if 2nd element is an error, and return early... Is this more efficient? No clue.
-      if exp[1].hasIndex(first) then return exp[1][first] 
-      // Map doesnt have index for :x, so we perform a lookup for x
-      if exp[1].hasIndex(first[1:]) then return exp[1][first[1:]]
-      return self.lispError("Key " + first + " not found from map " + @exp[1])
-    end if
+
         
 		// normal function call
 		op = self.eval(first, env)
@@ -1407,6 +1424,17 @@ clojette.eval = function(exp, env)
         args.push(@val)
     	end for
 		end if
+
+    // Handle syntax for (:x map), basically looks up stuff from maps using keywords.
+    // Very Clojure-esque.
+    if first[0] == ":" and args[0] isa map then
+      if self.isError(args[0]) then return args[0] // Check if 2nd element is an error, and return early... Is this more efficient? No clue.
+      if args[0].hasIndex(first) then return args[0][first] 
+      // Map doesnt have index for :x, so we perform a lookup for x
+      if args[0].hasIndex(first[1:]) then return args[0][first[1:]]
+      return self.lispError("Key " + first + " not found from map " + args[0])
+    end if
+
 		isNative = self.globalEnv.natives.hasIndex(first)
     res = self.callFunction(@op, @args, @first, isNative)
     if self.isError(@res) then return self.addTrace(@res, " in " + first)
@@ -1489,6 +1517,7 @@ clojette.repl = function(prompt="Clojette> ")
   while true
       input = user_input(prompt)
       if input == "exit" or input == "quit" or input == "q" then break
+      input = "(do " + input + ")"
       result = self.eval(self.parse(input), self.globalEnv)
       if self.isError(@result) then
         print("ERROR: " + result["message"])
@@ -1505,6 +1534,5 @@ end function
 
 // Expose a function that evaluates code that is given to it :p
 clojette.eval_clojette = function(code, env=self.globalEnv)
-  code = "(do " + code + " )"
   return self.eval(self.parse(code), env)
 end function

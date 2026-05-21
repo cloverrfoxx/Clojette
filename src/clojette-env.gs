@@ -66,7 +66,8 @@ clojette.bindArgs = function(argNames, params, baseEnv)
             return self.lispError("Wrong number of args: expected at least " + restIdx + ", got " + params.len)
         end if
         for i in range(0, restIdx-1)
-            if params.len-1 == -1 then return self.lispError("Can't bind args for " + params + " due to there being nothing in " + argNames)
+            // we can safely access restIdx, but since params can be of len 0, and if params is empty, accessing anything would crash; we do not want that, so we error.
+            if params.len == 0 then return self.lispError("Cannot bind arguments for function [" + argNames.join(", ") + "]: expected at least 1 argument, got " + params.len)
             newEnv.set(argNames[i], params[i])
         end for
         restName = argNames[restIdx+1]

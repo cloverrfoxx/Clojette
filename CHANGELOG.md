@@ -3,9 +3,19 @@ Non-full release.
 
 ## Additions
 - Guard system tests
+- more tests!
+- added real-type? into stdlib
+- added docs for `guard()` and `real-type?`
+- made caught errors include a stack trace... now the errors are maps! you can rethrow them too I guess...
+- caught errors are rethrowable by themselves
 
 ## Bugfixes
 - Guard system would crash sometimes :c
+- fixed :map acces, before this the map itself wouldnt be evaluated causing it to fail
+- fixed a few errors caused by the namespace migration
+- fixed bindArgs crashing in certain situations (mainly when a variadic function was called with 0 args...)
+- fixed an issue in guard() where a function with no arguments with the "*" arity would crash the guard
+- fixed quasiquotes! NOW YOU CAN DO REAL HYGIENIC MACROS!
 
 # 1.1.2
 New release! Now with improved stability and reader macros!

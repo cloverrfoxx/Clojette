@@ -224,6 +224,8 @@ Creates an anonymous function.
 (fn [x & rest] rest)      ;; variadic: x is the first arg, rest is a list of the remaining
 ```
 
+> **Note**: You can use the reader macro `#(..)` to do anonymous functions too! To access the variables in the anonymous function, you can use the variable `args`. `args` is a list of all the arguments the anonymous function got.
+
 ### `do`
 
 Evaluates multiple expressions in order and returns the value of the last one. Useful for sequencing side effects.
@@ -608,16 +610,27 @@ If `body` evaluates without error, `try` returns its value. If an error is throw
 ```clojure
 (try
   (/ 1 0)
-  (catch [e] (str "caught: " e)))
+  (catch [e] (str "caught: " (:message e))))
 ;; -> "caught: Division by zero"
 
 (try
   (throw "oops")
-  (catch [e] e))
+  (catch [e] (:message e)))
 ;; -> "oops"
 ```
 
 Errors include a stack trace that is printed at the top level if uncaught.
+
+You can rethrow errors you catch by giving the caught error to `throw`.
+
+```clojure
+(try
+  (/ 1 0)
+  (catch [e] (throw e)))
+;; -> Error object
+```
+
+
 
 ### runtime argument validation using `guard`
 
@@ -845,6 +858,8 @@ globals         ;; global variable map
 yield           ;; yield execution
 exit            ;; exit the program
 wait            ;; pause execution
+poll-input      ;; captures input without blocking execution
+format-columns  ;; returns a formatted string
 ```
 
 These are native and are called like any other function:
@@ -954,7 +969,6 @@ Comparison functions accept multiple arguments and check them pairwise:
 | `(keys m)` | List of all keys |
 | `(vals m)` | List of all values |
 | `(contains? m k)` | True if key exists |
-| `(map? x)` | True if x is a map |
 
 ### String operations
 
@@ -988,6 +1002,7 @@ Comparison functions accept multiple arguments and check them pairwise:
 | `(neg? n)` | True if n < 0 |
 | `(even? n)` | True if n is even |
 | `(odd? n)` | True if n is odd |
+| `(real-type? n)` | returns the real type as a string |
 
 ### Function utilities
 
