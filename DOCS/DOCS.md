@@ -386,7 +386,7 @@ Convenience macros for one-armed conditionals:
 
 ### `cond`
 
-A multi-branch conditional. Clauses are tested in order;; the first truthy one wins. Use `:else` as a catch-all. For those coming from other languages, this is Clojette's version of the `switch` statement. (And yes, it is implemented as a macro, thanks for asking.)
+A multi-branch conditional. Clauses are tested in order; the first truthy one wins. Use `:else` as a catch-all. For those coming from other languages, this is Clojette's version of the `switch` statement. (And yes, it is implemented as a macro, thanks for asking.)
 
 ```clojure
 (cond

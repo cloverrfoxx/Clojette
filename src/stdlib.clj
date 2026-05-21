@@ -130,3 +130,15 @@
 (defn constantly [x] (fn [& _] x))
 (defn complement [f] (fn [& args] (not (apply f args))))
 (defn comp [f g] (fn [x] (f (g x))))
+
+;; I/O
+;;(defn slurp [path]
+;;  (guard "1" '(string) [path] "slurp")
+;;
+;;  (let [abs (get_abs_path(path))
+;;        comp (.host_computer (get_shell))
+;;        file (.File comp abs)]
+;;
+;;    (if (null? file)
+;;      (throw (str "slurp: file not found: " abs))
+;;      (.get_content file))))

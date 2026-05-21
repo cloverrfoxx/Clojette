@@ -421,13 +421,13 @@ clojette.eval = function(exp, env)
     			__closedEnv = closedEnv
     			newEnv = self.makeEnv(__closedEnv)
     			if __argNames.len > 0 and forms.len > 0 then
-        			for i in range(0, __argNames.len-1) // bounds are checkd
+        			for i in range(0, __argNames.len-1) // bounds are checked
             			if __argNames[i] == "&" then
                 			restName = __argNames[i+1]
                 			if i >= forms.len then
                     		newEnv.set(restName, [])
                 			else
-                    			newEnv.set(restName, forms[i:])
+                    		newEnv.set(restName, forms[i:])
                 			end if
                 			break
             			end if

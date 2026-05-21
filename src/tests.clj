@@ -146,6 +146,13 @@
 (assert-eq "cond first"    "a"    (cond true "a" false "b" :else "c"))
 (assert-eq "cond second"   "b"    (cond false "a" true "b" :else "c"))
 (assert-eq "cond else"     "c"    (cond false "a" false "b" :else "c"))
+(assert-eq "cond body"     "a"    (cond (= 1 1) "a" (= 1 2) "b" :else "c"))
+(defn func123 [num] 
+  (cond 
+    (= num 1) "a" 
+    (= 1 2) "b" 
+    :else "c"))
+(assert-eq "cond in fun"   "a"    (func123 1))
 
 ;; ============================================================
 ;; List operations
@@ -324,6 +331,37 @@
 (assert-eq "splice-unquote"
   [1 2 3 4]
   `(1 ~@[2 3] 4))
+
+;; expects (a 1 2 3 b)
+(defn test-splice []
+  (let [x (list 1 2 3)]
+    `(a ~@x b)))
+
+(assert-eq "splice-unquote in function"
+  ["a" 1 2 3 "b"]
+  (test-splice))
+
+;; expects (start 1 2 mid 3 4 end)
+(defn test-splice-nested []
+  (let [x (list 1 2)
+        y (list 3 4)]
+    `(start ~@x mid ~@y end)))
+
+(assert-eq "splice-unquote in function 2"
+  ["start" 1 2 "mid" 3 4 "end"]
+  (test-splice))
+
+;; (cond (= n 0) "zero" (= n 1) "one" :else "other")
+(defn test-cond-splice [n]
+  (let [clauses (list
+                  (list '(= n 0) "zero")
+                  (list '(= n 1) "one")
+                  (list :else "other"))]
+    `(cond ~@(car clauses) ~@(car (cdr clauses)) ~@(car (cdr (cdr clauses))))))
+
+(assert-eq "splice unquote thingy"
+  '(cond (= n 0) "zero" (= n 1) "one" :else "other")
+  (test-cond-splice 15))
 
 ;; ============================================================
 ;; Threading macros
