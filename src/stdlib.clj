@@ -109,6 +109,27 @@
     null
     (car xs)))
 
+(defn seq [x]
+  (cond
+    (null? x) null
+
+    (list? x)
+    (if (empty? x)
+      null
+      x)
+
+    (string? x)
+    (let [len (count x)]
+      (loop [i 0
+             acc []]
+        (if (>= i len)
+          (if (empty? acc) null acc)
+          (recur (+ i 1)
+                 (conj acc (subs x i (+ i 1)))))))
+
+    :else
+    null))
+
 ;; Math utils
 (defn even? [n] (= (% n 2) 0))
 (defn odd? [n] (not (even? n)))

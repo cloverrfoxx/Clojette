@@ -19,14 +19,17 @@
 
 // helpers
 clojette.atom = function(token)
-	// We dereference the token to not invoke anything by accident
+  if @token isa map then return self.lispError("Tried to give a map to atom()...") 
+	
+  // We dereference the token to not invoke anything by accident
   if @token isa number then return token
 	if @token isa funcRef then return self.lispError("Tried evaluating funcRef as an atom?")
-	// Return full string literal
-	if token[0] == """" then return token
-    num = token.val
-    if str(num) == token then return num
-    return token
+	
+  // Return full string literal
+  if token[0] == """" then return token
+  num = token.val
+  if str(num) == token then return num
+  return token
 end function
 
 // We can check if a given result is an error; we want error handling
@@ -56,6 +59,38 @@ clojette.gensym = function(prefix="G__")
     counter = self.globalEnv.locals["__gensym_counter__"] + 1
     self.globalEnv.locals["__gensym_counter__"] = counter
     return prefix + str(counter)
+end function
+
+clojette.macroexpand_1 = function(exp)
+    macromap = self.globalEnv.locals["macros"]
+
+    if not (exp isa list) then
+        return exp
+        //return self.lispError("macroexpand requires a list!")
+    end if
+
+    // walk each item in the expression
+    for item in exp
+        // recurse into nested lists
+        if item isa list then
+            expanded = self.macroexpand_1(item)
+
+            // if recursion expanded something, return immediately
+            if expanded != null then
+                return expanded
+            end if
+        else
+            // check if symbol is a macro
+            if macromap.hasIndex(item) then
+                macroFn = macromap[item]
+
+                // pass args after macro name
+                return macroFn(exp[1:])
+            end if
+        end if
+    end for
+
+    return null
 end function
 
 // There was an error here, where we were trying to check if op was a funcRef
@@ -266,14 +301,24 @@ clojette.readFromTokens = function(tokens)
 
     // Handle syntax sugar for anonymous functions...
     else if token == "#" then
-      if tokens[0] == "(" then
-        tokens.pull // consume (
-        expr = self.readFromTokens(tokens)
-        if self.isError(@expr) then return expr
-        if tokens[0] != ")" then return self.lispError("Expected ) after #(...)")
-        tokens.pull  // consume )
-        return ["fn", ["array", "&", "args"] , expr] // Return anonymous function.
+      if tokens[0] != "(" then
+        return self.lispError("Expected #(...) form")
       end if
+    
+      tokens.pull
+    
+      body = []
+      while tokens.len > 0 and tokens[0] != ")"
+        body.push(self.readFromTokens(tokens))
+      end while
+    
+      if tokens.len == 0 then
+        return self.lispError("Unterminated #(...)")
+      end if
+    
+      tokens.pull
+    
+      return ["fn",["array", "&", "args"], ["do"] + body]
       // In the future, if I need other # forms, they are added here.
 
   
@@ -294,7 +339,7 @@ clojette.readFromTokens = function(tokens)
       inner = self.readFromTokens(tokens)
       if self.isError(@inner) then return inner
       return ["unquote", inner]
-    // TODO: Fix gensym because this is NOT working
+    // DONE: Fix gensym because this is NOT working
     //else if token[token.len-1] == "#" then // Runtime gensym?
       //return ["gensym", token[0:token.len - 1]]
     // Return an atom, we can let the MiniScript type coercion do everything for us
@@ -302,7 +347,6 @@ clojette.readFromTokens = function(tokens)
   	return self.atom(token)
   end if
 end function
-
 // @Doc
 // This is the parser
 // It takes in code, tokenizes it, and returns te AST.

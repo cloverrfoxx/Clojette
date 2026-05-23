@@ -204,6 +204,12 @@ clojette.guard = function(arity, types, args, argname = null, message=null)
         return self.lispError("invalid arity")
     end if
 
+    // empty args, so there is a function that can take any amount of args and got 0 args... so we don't want to really do anything?
+    // if a function wants more than 1 argument, it should require 1+
+    if args.len == 0 then 
+        return null
+    end if
+
     for i in range(0, argc-1)
         actual = self.realTypeof(args[i])
 

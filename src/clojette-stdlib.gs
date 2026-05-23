@@ -138,7 +138,7 @@ end function
 clojette.globalEnv.locals["gensym"] = function(args)
     prefix = "G__"
     if args.len > 0 then prefix = args[0]
-    return self.gensym(prefix)
+    return clojette.gensym(prefix)
 end function
 
 // guard!
@@ -358,6 +358,7 @@ clojette.globalEnv.locals["second"] = function(args)
 
     lst = args[0]
     if lst == null then return null
+    if lst.len < 2 then return null // clojette.lispError("Self needs a list longer than 1!")
     return lst[1]
 end function
 
