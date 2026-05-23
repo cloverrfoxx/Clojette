@@ -1029,7 +1029,6 @@ Clojette is heavily inspired by Clojure but is not a complete implementation. He
 ### Missing features
 
 - **No `#{}`** - set literals are not supported
-- **No `#()` anonymous function reader macro** - use `(fn [x] ...)` instead
 - **No `@` deref** - there are no atoms/refs/agents
 - **No `require` / `use` / `import` for namespaces** - use the `ns/name` syntax directly, or `(import "path")` to load files. This will be rectified in future updates.
 - **No lazy sequences** - All sequences are eager. This would be a hassle to implement. If there are enough requests for this, they may be implemented in a future update.
@@ -1037,7 +1036,7 @@ Clojette is heavily inspired by Clojure but is not a complete implementation. He
 - **No Java interop** - duh, interop is with GreyScript/MiniScript instead (see [GreyScript Interop](#greyscript-interop))
 - **No protocol or multimethods**
 - **No `loop` binding destructuring** - bindings in `loop` must be simple names
-- **No keyword lookup** - `(:key map)` is not supported; use `(get map :key)` instead
+- **No argument destructuring in `let`** - bindings `let` must be simple names
 
 ### Behavioural differences
 - **Falsy values** - 0 and `false` are falsy due to MiniScript's type system, unlike Clojure where only false and nil are falsy. Empty lists and maps are also falsy.

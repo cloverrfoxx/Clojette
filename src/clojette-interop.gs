@@ -31,7 +31,7 @@ clojette.nativeFns = {
     "parent_path": @parent_path,
     "get_abs_path": @get_abs_path,
     "include_lib": @include_lib,
-	  "yield": @yield,
+    "yield": @yield,
     "exit": @exit,
     "wait": @wait,
     "time": @time,

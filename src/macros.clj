@@ -75,3 +75,7 @@
        (do
          ~@body
          (recur)))))
+
+(defmacro attempt [& body]
+  `(try (ok (do ~@body))
+        (catch [e] (err (:message e)))))
