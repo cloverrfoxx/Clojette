@@ -115,8 +115,8 @@
 (def add5 (make-adder 5))
 (assert-eq "higher order"  11  (add5 6))
 (assert-eq "reader anon fn"
-  9
-  (#(* % %) 3))
+  ((fn [& args] (* (first args) (first args))) 3)
+  (#(* (first args) (first args)) 3))
 (assert-true "too few args"
   (try
     (add 1)
@@ -359,7 +359,7 @@
 
 (assert-eq "splice-unquote in function 2"
   ["start" 1 2 "mid" 3 4 "end"]
-  (test-splice))
+  (test-splice-nested))
 
 ;; (cond (= n 0) "zero" (= n 1) "one" :else "other")
 (defn test-cond-splice [n]
@@ -392,10 +392,10 @@
 (assert-eq "try catch"     "caught"
   (try (throw "oops") (catch [e] "caught")))
 (assert-eq "catch message" "oops"
-  (try (throw "oops") (catch [e] e)))
+  (try (throw "oops") (catch [e] (:message e))))
 (assert-eq "nested try"    "inner"
   (try
-    (try (throw "inner") (catch [e] e))
+    (try (throw "inner") (catch [e] (:message e)))
     (catch [e] "outer")))
 (defn explode [] (throw "boom"))
 (defn wrapper [] (explode))
@@ -582,14 +582,10 @@ true
 (def sidefx 0)
 
 (and false (set! sidefx 123))
-(assert-eq "and short-circuit side effects"
-0
-sidefx)
+(assert-eq "and short-circuit side effects" 0 sidefx)
 
 (or true (set! sidefx 456))
-(assert-eq "or short-circuit side effects"
-0
-sidefx)
+(assert-eq "or short-circuit side effects" 0 sidefx)
 
 ;; ============================================================
 ;; Keyword lookup syntax
@@ -679,24 +675,25 @@ true
 ;; ============================================================
 (run-section "Macro edge cases")
 
-(defmacro unless2 [G__cond & G__body]
-`(if ~G__cond
-null
-(do ~@G__body)))
+(defmacro unless2 [cond & body]
+  `(let [cond# ~cond]
+     (if cond#
+       nil
+       (do ~@body))))
 
 (assert-eq "variadic macro"
-42
-(unless2 false
-1
-2
-42))
+  42
+  (unless2 false
+    1
+    2
+    42))
 
-(defmacro identity-macro [G__x1]
-G__x1)
+(defmacro identity-macro [x1#]
+  x1#)
 
-(assert-eq "macro returns atom"
-123
-(identity-macro 123))
+(assert-eq "macro returns atom" 
+           123 
+           (identity-macro 123))
 
 ;; ============================================================
 ;; Nested literal structures

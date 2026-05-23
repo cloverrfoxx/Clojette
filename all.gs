@@ -17,20 +17,17 @@
 //   You should have received a copy of the GNU General Public License
 //   along with Clojette. If not, see <https://www.gnu.org/licenses/>.
 
-// This is the runtime
-// Import this to embed it into your program
-
-// Clojette is now a class because we don't want to pollute the globals
 clojette = {}
 
 __runtimeTag__ = function
 end function
 
-clojette.lispError = function(msg)
-  if msg == null then return {"classID": "error", "__tag__": @__runtimeTag__, "message": "Null", "trace": []}
-  return {"classID": "error", "__tag__": @__runtimeTag__, "message": msg, "trace": []}
+clojette.lispError = function(msg=null, trace=null)
+  if msg == null then msg = "Null"
+  if trace == null then trace = []
+  if not trace isa list then trace = ["invalid-trace-type: " + trace]
+  return {"classID": "error", "__tag__": @__runtimeTag__, "message": msg, "trace": trace}
 end function
-
 // Environment setup, very cool.
 clojette.makeEnv = function(outerEnv)
     e = {}
@@ -80,7 +77,8 @@ clojette.bindArgs = function(argNames, params, baseEnv)
             return self.lispError("Wrong number of args: expected at least " + restIdx + ", got " + params.len)
         end if
         for i in range(0, restIdx-1)
-            if params.len-1 == -1 then return self.lispError("Can't bind args for " + params + " due to there being nothing in " + argNames)
+            // we can safely access restIdx, but since params can be of len 0, and if params is empty, accessing anything would crash; we do not want that, so we error.
+            if params.len == 0 then return self.lispError("Cannot bind arguments for function [" + argNames.join(", ") + "]: expected at least 1 argument, got " + params.len)
             newEnv.set(argNames[i], params[i])
         end for
         restName = argNames[restIdx+1]
@@ -235,9 +233,7 @@ end function
 clojette.globalEnv.locals["gensym"] = function(args)
     prefix = "G__"
     if args.len > 0 then prefix = args[0]
-    __gensym_counter__ = globalEnv.locals["__gensym_counter__"] + 1
-    globalEnv.locals["__gensym_counter__"] = __gensym_counter__
-    return prefix + __gensym_counter__
+    return clojette.gensym(prefix)
 end function
 
 // guard!
@@ -457,6 +453,7 @@ clojette.globalEnv.locals["second"] = function(args)
 
     lst = args[0]
     if lst == null then return null
+    if lst.len < 2 then return null // clojette.lispError("Self needs a list longer than 1!")
     return lst[1]
 end function
 
@@ -845,14 +842,17 @@ clojette.globalEnv.locals["nil"] = null
 
 // helpers
 clojette.atom = function(token)
-	// We dereference the token to not invoke anything by accident
+  if @token isa map then return self.lispError("Tried to give a map to atom()...") 
+	
+  // We dereference the token to not invoke anything by accident
   if @token isa number then return token
 	if @token isa funcRef then return self.lispError("Tried evaluating funcRef as an atom?")
-	// Return full string literal
-	if token[0] == """" then return token
-    num = token.val
-    if str(num) == token then return num
-    return token
+	
+  // Return full string literal
+  if token[0] == """" then return token
+  num = token.val
+  if str(num) == token then return num
+  return token
 end function
 
 // We can check if a given result is an error; we want error handling
@@ -882,6 +882,38 @@ clojette.gensym = function(prefix="G__")
     counter = self.globalEnv.locals["__gensym_counter__"] + 1
     self.globalEnv.locals["__gensym_counter__"] = counter
     return prefix + str(counter)
+end function
+
+clojette.macroexpand_1 = function(exp)
+    macromap = self.globalEnv.locals["macros"]
+
+    if not (exp isa list) then
+        return exp
+        //return self.lispError("macroexpand requires a list!")
+    end if
+
+    // walk each item in the expression
+    for item in exp
+        // recurse into nested lists
+        if item isa list then
+            expanded = self.macroexpand_1(item)
+
+            // if recursion expanded something, return immediately
+            if expanded != null then
+                return expanded
+            end if
+        else
+            // check if symbol is a macro
+            if macromap.hasIndex(item) then
+                macroFn = macromap[item]
+
+                // pass args after macro name
+                return macroFn(exp[1:])
+            end if
+        end if
+    end for
+
+    return null
 end function
 
 // There was an error here, where we were trying to check if op was a funcRef
@@ -1092,14 +1124,24 @@ clojette.readFromTokens = function(tokens)
 
     // Handle syntax sugar for anonymous functions...
     else if token == "#" then
-      if tokens[0] == "(" then
-        tokens.pull // consume (
-        expr = self.readFromTokens(tokens)
-        if self.isError(@expr) then return expr
-        if tokens[0] != ")" then return self.lispError("Expected ) after #(...)")
-        tokens.pull  // consume )
-        return ["fn", ["&", "args"] , expr] // Return anonymous function.
+      if tokens[0] != "(" then
+        return self.lispError("Expected #(...) form")
       end if
+    
+      tokens.pull
+    
+      body = []
+      while tokens.len > 0 and tokens[0] != ")"
+        body.push(self.readFromTokens(tokens))
+      end while
+    
+      if tokens.len == 0 then
+        return self.lispError("Unterminated #(...)")
+      end if
+    
+      tokens.pull
+    
+      return ["fn",["array", "&", "args"], ["do"] + body]
       // In the future, if I need other # forms, they are added here.
 
   
@@ -1120,7 +1162,7 @@ clojette.readFromTokens = function(tokens)
       inner = self.readFromTokens(tokens)
       if self.isError(@inner) then return inner
       return ["unquote", inner]
-    // TODO: Fix gensym because this is NOT working
+    // DONE: Fix gensym because this is NOT working
     //else if token[token.len-1] == "#" then // Runtime gensym?
       //return ["gensym", token[0:token.len - 1]]
     // Return an atom, we can let the MiniScript type coercion do everything for us
@@ -1128,7 +1170,6 @@ clojette.readFromTokens = function(tokens)
   	return self.atom(token)
   end if
 end function
-
 // @Doc
 // This is the parser
 // It takes in code, tokenizes it, and returns te AST.
@@ -1168,7 +1209,7 @@ clojette.eval = function(exp, env)
 
     		args = []
     		if exp.len > 2 then
-        	for i in range(2, exp.len-1)
+        	for i in range(2, exp.len-1) // bounds checked!
           result = self.eval(exp[i], env)
           if self.isError(@result) then return @result
             args.push(@result)
@@ -1188,7 +1229,7 @@ clojette.eval = function(exp, env)
     if first == "array" then
     		result = []
     		if exp.len > 1 then
-        		for i in range(1, exp.len-1)
+        		for i in range(1, exp.len-1) // bounds are checked
             		val = self.eval(exp[i], env)
             		if self.isError(@val) then return val
             		result.push(val)
@@ -1245,15 +1286,15 @@ clojette.eval = function(exp, env)
     			__argNames = argNames  // capture locally
     			__body = body          // capture locally
     			__closedEnv = closedEnv
-    			newEnv = self.makeEnv(__closedEnv)
+    			newEnv = clojette.makeEnv(__closedEnv)
     			if __argNames.len > 0 and forms.len > 0 then
-        			for i in range(0, __argNames.len-1)
+        			for i in range(0, __argNames.len-1) // bounds are checked
             			if __argNames[i] == "&" then
                 			restName = __argNames[i+1]
                 			if i >= forms.len then
                     		newEnv.set(restName, [])
                 			else
-                    			newEnv.set(restName, forms[i:])
+                    		newEnv.set(restName, forms[i:])
                 			end if
                 			break
             			end if
@@ -1264,7 +1305,7 @@ clojette.eval = function(exp, env)
             			end if
         			end for
     			end if
-    			return self.eval(__body, newEnv)
+    			return clojette.eval(__body, newEnv)
 			end function
     
     		self.globalEnv.locals["macros"][name] = @macroFn
@@ -1274,7 +1315,7 @@ clojette.eval = function(exp, env)
 		if first == "recur" then
     		args = []
     		if exp.len > 1 then
-        		for i in range(1, exp.len-1)
+        		for i in range(1, exp.len-1) // bounds are checked!
         			result = self.eval(exp[i], env)
        				if self.isError(result) then return result
         			args.push(result)
@@ -1296,8 +1337,9 @@ clojette.eval = function(exp, env)
         		end if
         		catchEnv = self.makeEnv(env)
         		if catchBindings.len > 0 then
-                if result.hasIndex("trace") then catchEnv.set(catchBindings[0], {":message": result["message"], ":trace": result["trace"]}) 
-        		    else catchEnv.set(catchBindings[0], {":message": result["message"]})
+                if result.hasIndex("trace") then catchEnv.set(catchBindings[0], {"message": result["message"], "trace": result["trace"]}) 
+        		    else 
+                  catchEnv.set(catchBindings[0], {"message": result["message"], "trace": []})
         		end if
         		return self.eval(catchClause[2], catchEnv)
     		end if
@@ -1307,7 +1349,13 @@ clojette.eval = function(exp, env)
 		if first == "throw" then
     		msg = self.eval(exp[1], env)
     		if self.isError(msg) then return msg
-    		return self.lispError(msg)
+        trace = null
+        if exp.len >= 3 then 
+          trace = self.eval(exp[2], env)
+          if self.isError(trace) then return trace
+        end if
+        if msg isa map then return self.lispError(msg["message"], msg["trace"])
+    		return self.lispError(msg, trace)
 		end if
 	
 		if first == "apply" then
@@ -1325,7 +1373,7 @@ clojette.eval = function(exp, env)
 		if first == "and" then
     		result = true
 			  if exp.len > 1 then
-    			for i in range(1, exp.len-1)
+    			for i in range(1, exp.len-1) // bounds are checked
         		result = self.eval(exp[i], env)
 					if self.isError(@result) then return result
 					if not result then return result
@@ -1344,9 +1392,9 @@ clojette.eval = function(exp, env)
     		return false
 		end if
 
-        if first == "quote" then
-            return exp[1]
-        end if
+    if first == "quote" then
+        return exp[1]
+    end if
 
 		if first == "let" then
     		bindings = exp[1]
@@ -1416,8 +1464,6 @@ clojette.eval = function(exp, env)
     	end if
     	return {"classID": "fn", "args": params, "body": exp[2:], "env": env}
 		end if
-
-
         
 		// normal function call
 		op = self.eval(first, env)
@@ -1488,9 +1534,8 @@ clojette.nativeFns = {
     "program_path": @program_path,
     "current_path": @current_path,
     "parent_path": @parent_path,
-    "get_abs_path": @get_abs_path,
     "include_lib": @include_lib,
-	  "yield": @yield,
+    "yield": @yield,
     "exit": @exit,
     "wait": @wait,
     "time": @time,
@@ -1506,9 +1551,7 @@ clojette.nativeFns = {
     "md5": @md5,
     "get-custom-object": @get_custom_object,
     "cob": @get_custom_object,
-    "cd": @cd,
     "hash": @hash,
-    "poll-input": @poll_input,
 }
 
 for kv in clojette.nativeFns
@@ -1542,3 +1585,6 @@ end function
 clojette.eval_clojette = function(code, env=self.globalEnv)
   return self.eval(self.parse(code), env)
 end function
+
+print(clojette.eval_clojette(user_input("Clojette> ")))
+

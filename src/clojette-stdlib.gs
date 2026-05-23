@@ -518,8 +518,25 @@ end function
 clojette.globalEnv.locals["contains?"] = function(args)
     err = clojette.guard("2", [["map", "list", "string", "null"], "any"], args, "contains")
     if args.len != 2 then return clojette.lispError("contains? requires exactly 2 arguments")
-    if args[0] == null then return false
-    return args[0].hasIndex(args[1])
+
+    target = args[0]
+    value = args[1]
+
+    if target == null then return false
+
+    if target isa string then
+      if value isa number then
+        return target.hasIndex(value)
+      end if
+
+      if value isa string then
+        return target.indexOf(value) != null
+      end if
+
+      return false
+    end if
+
+    return target.hasIndex(value)
 end function
 
 // Type checks

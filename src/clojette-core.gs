@@ -463,7 +463,7 @@ clojette.eval = function(exp, env)
     			__argNames = argNames  // capture locally
     			__body = body          // capture locally
     			__closedEnv = closedEnv
-    			newEnv = self.makeEnv(__closedEnv)
+    			newEnv = clojette.makeEnv(__closedEnv)
     			if __argNames.len > 0 and forms.len > 0 then
         			for i in range(0, __argNames.len-1) // bounds are checked
             			if __argNames[i] == "&" then
@@ -482,7 +482,7 @@ clojette.eval = function(exp, env)
             			end if
         			end for
     			end if
-    			return self.eval(__body, newEnv)
+    			return clojette.eval(__body, newEnv)
 			end function
     
     		self.globalEnv.locals["macros"][name] = @macroFn
