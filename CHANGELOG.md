@@ -8,6 +8,7 @@ Non-full release.
 - added docs for `guard()` and `real-type?`
 - made caught errors include a stack trace... now the errors are maps! you can rethrow them too I guess...
 - caught errors are rethrowable by themselves
+- made stdlib considerably better
 
 ## Bugfixes
 - Guard system would crash sometimes :c
