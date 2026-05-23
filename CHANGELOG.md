@@ -15,7 +15,8 @@ Non-full release.
 - fixed a few errors caused by the namespace migration
 - fixed bindArgs crashing in certain situations (mainly when a variadic function was called with 0 args...)
 - fixed an issue in guard() where a function with no arguments with the "*" arity would crash the guard
-- fixed quasiquotes! NOW YOU CAN DO REAL HYGIENIC MACROS!
+- fixed gensym! NOW YOU CAN DO REAL HYGIENIC MACROS!
+- fixed #() reader macro
 
 # 1.1.2
 New release! Now with improved stability and reader macros!
