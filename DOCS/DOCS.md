@@ -132,7 +132,7 @@ Keywords start with : and always evaluate to themselves - they are their own val
 
 Keywords are useful as map keys because they're unambiguous and self-describing. See [Map operations](#map-operations) for how they're used in practice.
 
-> Note: In Clojure, you can use a keyword as a function to look up values in a map: (:name my-map). This is not yet supported in Clojette. Use (get my-map :name) instead.
+> Note: In Clojure, you can use a keyword as a function to look up values in a map: (:name my-map). This is also supported in Clojette.
 
 ### Lists
 
